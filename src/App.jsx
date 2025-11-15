@@ -140,10 +140,36 @@ const Login = () => {
               className="input-field" placeholder="Enter your email" required />
           </div>
           <div className="input-group">
-            <label className="input-label">Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              className="input-field" placeholder="Enter your password" required />
-          </div>
+  <label className="input-label">Password</label>
+  <div style={{ position: 'relative' }}>
+    <input
+      type={showPassword ? "text" : "password"}
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      className="input-field"
+      placeholder="Enter your password"
+      required
+    />
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      style={{
+        position: "absolute",
+        right: "12px",
+        top: "50%",
+        transform: "translateY(-50%)",
+        border: "none",
+        background: "none",
+        cursor: "pointer",
+        fontSize: "14px",
+        color: "#6b7280"
+      }}
+    >
+      {showPassword ? "Hide" : "Show"}
+    </button>
+  </div>
+</div>
+
           <button onClick={handleSubmit} className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
