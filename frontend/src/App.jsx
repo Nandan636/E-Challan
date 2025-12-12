@@ -64,6 +64,7 @@ const api = {
     formData.append('location', JSON.stringify(challanData.location));
     formData.append('reportedBy', challanData.reportedBy);
     formData.append('reporterName', challanData.reporterName);
+    formData.append('tags', JSON.stringify(challanData.tags || []));
 
     const response = await fetch(`${API_URL}/challans`, {
       method: 'POST',
@@ -289,6 +290,9 @@ const UploadChallan = ({ onClose, onSuccess }) => {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [detecting, setDetecting] = useState(false);
+  const [selectedTags, setSelectedTags] = useState([]);
+
+  const violationTags = ['Accident', 'Overspeeding', 'No Parking', 'Red Light', 'Wrong Lane', 'Without Helmet', 'Rash Driving', 'Document Violation'];
 
   const detectNumberPlate = async (imageFile) => {
     try {
@@ -383,6 +387,10 @@ const UploadChallan = ({ onClose, onSuccess }) => {
       alert('Please capture your location first');
       return;
     }
+    if (selectedTags.length === 0) {
+      alert('Please select at least one violation tag');
+      return;
+    }
     setLoading(true);
     try {
       await api.uploadChallan({ 
@@ -391,7 +399,8 @@ const UploadChallan = ({ onClose, onSuccess }) => {
         description, 
         location,
         reportedBy: user.id,
-        reporterName: user.name
+        reporterName: user.name,
+        tags: selectedTags
       });
       onSuccess();
     } catch (err) {
@@ -436,6 +445,30 @@ const UploadChallan = ({ onClose, onSuccess }) => {
               )}
             </div>
           )}
+          <div className="input-group">
+            <label className="input-label">🏷️ Violation Type (Select one or more)</label>
+            <div className="tags-container">
+              {violationTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    if (selectedTags.includes(tag)) {
+                      setSelectedTags(selectedTags.filter(t => t !== tag));
+                    } else {
+                      setSelectedTags([...selectedTags, tag]);
+                    }
+                  }}
+                  className={`tag-button ${selectedTags.includes(tag) ? 'active' : ''}`}
+                >
+                  {selectedTags.includes(tag) ? '✓' : ''} {tag}
+                </button>
+              ))}
+            </div>
+            {selectedTags.length > 0 && (
+              <p className="input-success">✓ Selected: {selectedTags.join(', ')}</p>
+            )}
+          </div>
           <div className="input-group">
             <label className="input-label">📍 Location</label>
             {!location ? (
