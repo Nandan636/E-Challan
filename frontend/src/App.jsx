@@ -96,6 +96,12 @@ const api = {
     const response = await fetch(`${API_URL}/stats`);
     const data = await response.json();
     return data.stats || {};
+  },
+  
+  getLeaderboard: async () => {
+    const response = await fetch(`${API_URL}/leaderboard`);
+    const data = await response.json();
+    return data.leaderboard || [];
   }
 };
 
@@ -467,10 +473,98 @@ const UploadChallan = ({ onClose, onSuccess }) => {
   );
 };
 
+// LEADERBOARD COMPONENT
+const Leaderboard = ({ onClose }) => {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      try {
+        const data = await api.getLeaderboard();
+        setLeaderboard(data);
+      } catch (err) {
+        console.error('Error fetching leaderboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLeaderboard();
+  }, []);
+
+  const getRankIcon = (rank) => {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `#${rank}`;
+  };
+
+  const getRankClass = (rank) => {
+    if (rank === 1) return 'rank-gold';
+    if (rank === 2) return 'rank-silver';
+    if (rank === 3) return 'rank-bronze';
+    return 'rank-default';
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>🏆 Community Leaderboard</h2>
+          <button onClick={onClose} className="modal-close">×</button>
+        </div>
+        <div className="leaderboard-content">
+          <p className="leaderboard-subtitle">Top contributors making our roads safer</p>
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading leaderboard...</p>
+            </div>
+          ) : leaderboard.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📊</div>
+              <p>No reports yet. Be the first to contribute!</p>
+            </div>
+          ) : (
+            <div className="leaderboard-list">
+              {leaderboard.map((user) => (
+                <div key={user.id} className={`leaderboard-item ${getRankClass(user.rank)}`}>
+                  <div className="rank-badge">
+                    <span className="rank-icon">{getRankIcon(user.rank)}</span>
+                  </div>
+                  <div className="user-info">
+                    <h4 className="user-name">{user.name}</h4>
+                    <p className="user-email">{user.email}</p>
+                  </div>
+                  <div className="user-stats">
+                    <div className="stat-item">
+                      <span className="stat-number">{user.totalReports}</span>
+                      <span className="stat-label">Total Reports</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-number stat-approved">{user.approvedReports}</span>
+                      <span className="stat-label">Approved</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-number stat-pending">{user.pendingReports}</span>
+                      <span className="stat-label">Pending</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // USER DASHBOARD
 const UserDashboard = () => {
   const { user, logout } = useAuth();
   const [showUpload, setShowUpload] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [success, setSuccess] = useState(false);
   const [stats, setStats] = useState({});
 
@@ -525,9 +619,14 @@ const UserDashboard = () => {
             <h2 className="main-title">Report Traffic Violation</h2>
             <p className="main-subtitle">Help make our roads safer by reporting traffic violations</p>
           </div>
-          <button onClick={() => setShowUpload(true)} className="btn btn-primary btn-large btn-full">
-            📷 Upload Violation Report
-          </button>
+          <div className="main-actions">
+            <button onClick={() => setShowUpload(true)} className="btn btn-primary btn-large">
+              📷 Upload Violation Report
+            </button>
+            <button onClick={() => setShowLeaderboard(true)} className="btn btn-secondary btn-large">
+              🏆 View Leaderboard
+            </button>
+          </div>
         </div>
         <div className="card">
           <h3 className="card-title"><span>⚡</span> Quick & Easy Process</h3>
@@ -634,6 +733,7 @@ const UserDashboard = () => {
         </div>
       </div>
       {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
+      {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
 };
@@ -802,7 +902,40 @@ const PoliceDashboard = () => {
             </div>
           )}
         </div>
+        
+        <div className="card">
+          <div className="card-header">
+            <h2>🏆 Top Contributors</h2>
+            <button onClick={() => setShowLeaderboard(true)} className="btn btn-secondary btn-small">
+              View Full Leaderboard
+            </button>
+          </div>
+          {leaderboard.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📊</div>
+              <p>No contributors yet</p>
+            </div>
+          ) : (
+            <div className="mini-leaderboard">
+              {leaderboard.map((user, index) => (
+                <div key={user.id} className="mini-leaderboard-item">
+                  <div className="rank-badge-mini">
+                    <span>{index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}</span>
+                  </div>
+                  <div className="user-info-mini">
+                    <h4>{user.name}</h4>
+                    <p>{user.totalReports} reports</p>
+                  </div>
+                  <div className="user-stats-mini">
+                    <span className="stat-approved">{user.approvedReports} approved</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+      {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
 };
