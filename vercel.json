@@ -1,27 +1,14 @@
 {
   "version": 2,
-  "name": "e-challan",
+  "name": "e-challan-frontend",
   "builds": [
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
       "config": { "distDir": "dist" }
-    },
-    {
-      "src": "backend/server.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
-    // Serve serverless backend for api requests
-    { "src": "/api/(.*)", "dest": "/backend/server.js" },
-
-    // Serve static frontend build
     { "src": "/(.*)", "dest": "/frontend/dist/$1" }
-  ],
-  "env": {
-    // Set these in the Vercel dashboard (recommended) or use project/environment variables
-    "MONGODB_URI": "@mongodb_uri",
-    "AI_SERVICE_URL": "@ai_service_url"
-  }
+  ]
 }
