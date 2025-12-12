@@ -778,10 +778,14 @@ const PoliceDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [stats, setStats] = useState({});
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showReportsModal, setShowReportsModal] = useState(false);
 
   useEffect(() => {
     fetchChallans();
     fetchStats();
+    fetchLeaderboard();
   }, [filter]);
 
   const fetchChallans = async () => {
@@ -805,12 +809,22 @@ const PoliceDashboard = () => {
     }
   };
 
+  const fetchLeaderboard = async () => {
+    try {
+      const data = await api.getLeaderboard();
+      setLeaderboard(data.slice(0, 5)); // Top 5 only
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+    }
+  };
+
   const handleAction = async (challanId, action) => {
     try {
       await api.updateChallanStatus(challanId, action);
       alert(`Challan ${action} successfully!`);
       fetchChallans();
       fetchStats();
+      fetchLeaderboard(); // Refresh leaderboard after action
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -838,7 +852,7 @@ const PoliceDashboard = () => {
       </nav>
       <div className="container dashboard-content">
         <div className="stats-grid stats-grid-4">
-          <div className="stat-card stat-blue">
+          <div className="stat-card stat-blue" onClick={() => setShowReportsModal(true)} style={{cursor: 'pointer'}}>
             <div className="stat-content">
               <div>
                 <p className="stat-label">Total Reports</p>
@@ -902,7 +916,7 @@ const PoliceDashboard = () => {
           ) : (
             <div className="challans-list">
               {challans.map((challan) => (
-                <div key={challan._id} className="challan-card">
+                <div key={challan.id} className="challan-card">
                   <div className="challan-header">
                     <div>
                       <h3 className="challan-plate">{challan.numberPlate}</h3>
@@ -924,9 +938,9 @@ const PoliceDashboard = () => {
                   </div>
                   {challan.status === 'pending' && (
                     <div className="challan-actions">
-                      <button onClick={() => handleAction(challan._id, 'approved')} 
+                      <button onClick={() => handleAction(challan.id, 'approved')} 
                         className="btn btn-success btn-small">✅ Approve</button>
-                      <button onClick={() => handleAction(challan._id, 'rejected')} 
+                      <button onClick={() => handleAction(challan.id, 'rejected')} 
                         className="btn btn-danger btn-small">❌ Reject</button>
                     </div>
                   )}
@@ -969,6 +983,67 @@ const PoliceDashboard = () => {
         </div>
       </div>
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
+      {showReportsModal && (
+        <div className="modal-overlay" onClick={() => setShowReportsModal(false)}>
+          <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>📋 All Reports - Review & Action</h2>
+              <button onClick={() => setShowReportsModal(false)} className="modal-close">×</button>
+            </div>
+            <div className="reports-modal-content">
+              {loading ? (
+                <div className="loading-state">
+                  <div className="spinner"></div>
+                  <p>Loading reports...</p>
+                </div>
+              ) : challans.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📋</div>
+                  <p>No reports submitted yet</p>
+                </div>
+              ) : (
+                <div className="challans-list">
+                  {challans.map((challan) => (
+                    <div key={challan.id} className="challan-card">
+                      <div className="challan-header">
+                        <div>
+                          <h3 className="challan-plate">{challan.numberPlate}</h3>
+                          <span className={`status-badge status-${challan.status}`}>
+                            {challan.status.charAt(0).toUpperCase() + challan.status.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="challan-meta">
+                        <p>📅 Reported: {new Date(challan.createdAt).toLocaleString('en-IN')}</p>
+                        <p>👤 Reported by: {challan.reporterName}</p>
+                      </div>
+                      <div className="challan-details">
+                        <p><strong>🚨 Violation:</strong> {challan.description}</p>
+                        <p><strong>📍 Location:</strong> {challan.location.address}</p>
+                        {challan.imageUrl && (
+                          <p><strong>📷 Image:</strong> <a href={`http://localhost:5000${challan.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
+                        )}
+                      </div>
+                      {challan.status === 'pending' && (
+                        <div className="challan-actions">
+                          <button onClick={() => {
+                            handleAction(challan.id, 'approved');
+                            setShowReportsModal(false);
+                          }} className="btn btn-success btn-small">✅ Approve</button>
+                          <button onClick={() => {
+                            handleAction(challan.id, 'rejected');
+                            setShowReportsModal(false);
+                          }} className="btn btn-danger btn-small">❌ Reject</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -126,36 +126,28 @@ app.get('/api/challans/user/:userId', (req, res) => {
 });
 
 // Create new challan with image upload
-app.post('/api/challans', upload.single('image'), async (req, res) => {
+app.post('/api/challans', upload.single('image'), (req, res) => {
   try {
     const { numberPlate, description, location, reportedBy, reporterName } = req.body;
-
-    let tags = [];
-    if (req.body.tags) {
-      try {
-        tags = JSON.parse(req.body.tags);
-        if (!Array.isArray(tags)) tags = [];
-      } catch (e) {
-        // if tags was sent as comma separated values
-        tags = String(req.body.tags).split(',').map(t => t.trim()).filter(Boolean);
-      }
-    }
 
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Image is required' });
     }
 
-    const challan = new Challan({
+    const challan = {
+      id: challanIdCounter++,
       numberPlate,
       description,
       imageUrl: `/uploads/${req.file.filename}`,
       location: JSON.parse(location),
-      reportedBy,
+      reportedBy: parseInt(reportedBy),
       reporterName,
-      tags
-    });
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-    await challan.save();
+    challans.push(challan);
 
     res.json({ success: true, challan, message: 'Challan submitted successfully' });
   } catch (error) {
