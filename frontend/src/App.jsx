@@ -103,6 +103,44 @@ const api = {
     const response = await fetch(`${API_URL}/leaderboard`);
     const data = await response.json();
     return data.leaderboard || [];
+  },
+
+  // Service Request APIs
+  createServiceRequest: async (requestData) => {
+    const formData = new FormData();
+    formData.append('image', requestData.image);
+    formData.append('issueType', requestData.issueType);
+    formData.append('description', requestData.description);
+    formData.append('location', JSON.stringify(requestData.location));
+    formData.append('reportedBy', requestData.reportedBy);
+    formData.append('reporterName', requestData.reporterName);
+    formData.append('vehicleInfo', requestData.vehicleInfo);
+
+    const response = await fetch(`${API_URL}/service-requests`, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message);
+    return data;
+  },
+
+  getServiceRequests: async (filter = 'all') => {
+    const url = filter === 'all' ? `${API_URL}/service-requests` : `${API_URL}/service-requests?status=${filter}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    return data.requests || [];
+  },
+
+  updateServiceRequestStatus: async (requestId, status) => {
+    const response = await fetch(`${API_URL}/service-requests/${requestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.message);
+    return data;
   }
 };
 
@@ -268,6 +306,7 @@ const Register = ({ onBack }) => {
             <select name="role" value={formData.role} onChange={handleChange} className="input-field">
               <option value="user">👤 Citizen</option>
               <option value="police">👮 Police Officer</option>
+              <option value="service">🔧 Service Shop</option>
             </select>
           </div>
           <button onClick={handleSubmit} className="btn btn-primary btn-full" disabled={loading}>
@@ -593,6 +632,146 @@ const Leaderboard = ({ onClose }) => {
   );
 };
 
+// SERVICE REQUEST UPLOAD COMPONENT
+const RequestService = ({ onClose, onSuccess }) => {
+  const { user } = useAuth();
+  const [image, setImage] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [issueType, setIssueType] = useState('');
+  const [description, setDescription] = useState('');
+  const [vehicleInfo, setVehicleInfo] = useState('');
+  const [location, setLocation] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const vehicleIssues = ['Tyre Puncture', 'Dead Battery', 'Engine Problem', 'Brake Failure', 'Oil Leak', 'Starter Issue', 'Fuel Problem', 'Electrical Fault', 'Windshield Damage', 'Other'];
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const getLocation = () => {
+    setLoading(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            address: 'Current Location, India'
+          });
+          setLoading(false);
+        },
+        () => {
+          alert('Unable to get location');
+          setLoading(false);
+        }
+      );
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!location) {
+      alert('Please capture your location first');
+      return;
+    }
+    if (!issueType) {
+      alert('Please select a vehicle issue type');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.createServiceRequest({
+        image,
+        issueType,
+        description,
+        location,
+        vehicleInfo,
+        reportedBy: user.id,
+        reporterName: user.name
+      });
+      onSuccess();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>🔧 Request Vehicle Service</h2>
+          <button onClick={onClose} className="modal-close">×</button>
+        </div>
+        <div>
+          <div className="input-group">
+            <label className="input-label">📷 Upload Vehicle Photo</label>
+            <input type="file" accept="image/*" onChange={handleImageChange} 
+              className="input-field" required />
+            <p className="input-hint">Take a photo showing the vehicle issue</p>
+          </div>
+          {preview && (
+            <div className="image-preview">
+              <img src={preview} alt="Preview" />
+            </div>
+          )}
+          <div className="input-group">
+            <label className="input-label">🚗 Vehicle Information</label>
+            <input type="text" value={vehicleInfo} onChange={(e) => setVehicleInfo(e.target.value)}
+              className="input-field" placeholder="e.g., Honda City, Silver, 2020" />
+          </div>
+          <div className="input-group">
+            <label className="input-label">⚠️ Issue Type</label>
+            <select value={issueType} onChange={(e) => setIssueType(e.target.value)} className="input-field" required>
+              <option value="">Select issue type</option>
+              {vehicleIssues.map((issue) => (
+                <option key={issue} value={issue}>{issue}</option>
+              ))}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="input-label">📝 Description</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
+              className="input-field" rows="3" 
+              placeholder="Describe the vehicle problem in detail"
+              required />
+          </div>
+          <div className="input-group">
+            <label className="input-label">📍 Location</label>
+            {!location ? (
+              <button onClick={getLocation} disabled={loading} className="btn btn-success btn-full">
+                {loading ? 'Getting Location...' : '📍 Capture Current Location'}
+              </button>
+            ) : (
+              <div className="location-captured">
+                <p className="location-title">✓ Location Captured Successfully</p>
+                <p className="location-address">{location.address}</p>
+                <p className="location-coords">
+                  Lat: {location.latitude.toFixed(6)}, Long: {location.longitude.toFixed(6)}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="modal-actions">
+            <button onClick={handleSubmit} className="btn btn-primary" disabled={loading}>
+              {loading ? '⏳ Submitting...' : '✓ Submit Service Request'}
+            </button>
+            <button onClick={onClose} disabled={loading} className="btn btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // USER DASHBOARD
 const UserDashboard = () => {
   const { user, logout } = useAuth();
@@ -778,14 +957,10 @@ const PoliceDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [stats, setStats] = useState({});
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showReportsModal, setShowReportsModal] = useState(false);
 
   useEffect(() => {
     fetchChallans();
     fetchStats();
-    fetchLeaderboard();
   }, [filter]);
 
   const fetchChallans = async () => {
@@ -809,22 +984,12 @@ const PoliceDashboard = () => {
     }
   };
 
-  const fetchLeaderboard = async () => {
-    try {
-      const data = await api.getLeaderboard();
-      setLeaderboard(data.slice(0, 5)); // Top 5 only
-    } catch (err) {
-      console.error('Error fetching leaderboard:', err);
-    }
-  };
-
   const handleAction = async (challanId, action) => {
     try {
       await api.updateChallanStatus(challanId, action);
       alert(`Challan ${action} successfully!`);
       fetchChallans();
       fetchStats();
-      fetchLeaderboard(); // Refresh leaderboard after action
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -852,7 +1017,7 @@ const PoliceDashboard = () => {
       </nav>
       <div className="container dashboard-content">
         <div className="stats-grid stats-grid-4">
-          <div className="stat-card stat-blue" onClick={() => setShowReportsModal(true)} style={{cursor: 'pointer'}}>
+          <div className="stat-card stat-blue">
             <div className="stat-content">
               <div>
                 <p className="stat-label">Total Reports</p>
@@ -916,7 +1081,7 @@ const PoliceDashboard = () => {
           ) : (
             <div className="challans-list">
               {challans.map((challan) => (
-                <div key={challan.id} className="challan-card">
+                <div key={challan._id} className="challan-card">
                   <div className="challan-header">
                     <div>
                       <h3 className="challan-plate">{challan.numberPlate}</h3>
@@ -938,9 +1103,9 @@ const PoliceDashboard = () => {
                   </div>
                   {challan.status === 'pending' && (
                     <div className="challan-actions">
-                      <button onClick={() => handleAction(challan.id, 'approved')} 
+                      <button onClick={() => handleAction(challan._id, 'approved')} 
                         className="btn btn-success btn-small">✅ Approve</button>
-                      <button onClick={() => handleAction(challan.id, 'rejected')} 
+                      <button onClick={() => handleAction(challan._id, 'rejected')} 
                         className="btn btn-danger btn-small">❌ Reject</button>
                     </div>
                   )}
@@ -983,67 +1148,170 @@ const PoliceDashboard = () => {
         </div>
       </div>
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
-      {showReportsModal && (
-        <div className="modal-overlay" onClick={() => setShowReportsModal(false)}>
-          <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>📋 All Reports - Review & Action</h2>
-              <button onClick={() => setShowReportsModal(false)} className="modal-close">×</button>
+    </div>
+  );
+};
+
+// SERVICE SHOP DASHBOARD
+const ServiceShopDashboard = () => {
+  const { user, logout } = useAuth();
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [stats, setStats] = useState({});
+
+  useEffect(() => {
+    fetchRequests();
+    fetchStats();
+  }, [filter]);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getServiceRequests(filter);
+      setRequests(data);
+    } catch (err) {
+      console.error('Error fetching requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${API_URL}/service-stats`);
+      const data = await response.json();
+      if (data.success) {
+        setStats(data.stats);
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  };
+
+  const handleAction = async (requestId, action) => {
+    try {
+      await api.updateServiceRequestStatus(requestId, action);
+      alert(`Service request ${action} successfully!`);
+      fetchRequests();
+      fetchStats();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  return (
+    <div className="dashboard">
+      <nav className="navbar navbar-service">
+        <div className="container navbar-content">
+          <div className="navbar-brand">
+            <span className="navbar-icon">🔧</span>
+            <div>
+              <h1>Service Shop Portal</h1>
+              <p className="navbar-subtitle">Vehicle Service Management</p>
             </div>
-            <div className="reports-modal-content">
-              {loading ? (
-                <div className="loading-state">
-                  <div className="spinner"></div>
-                  <p>Loading reports...</p>
-                </div>
-              ) : challans.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📋</div>
-                  <p>No reports submitted yet</p>
-                </div>
-              ) : (
-                <div className="challans-list">
-                  {challans.map((challan) => (
-                    <div key={challan.id} className="challan-card">
-                      <div className="challan-header">
-                        <div>
-                          <h3 className="challan-plate">{challan.numberPlate}</h3>
-                          <span className={`status-badge status-${challan.status}`}>
-                            {challan.status.charAt(0).toUpperCase() + challan.status.slice(1)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="challan-meta">
-                        <p>📅 Reported: {new Date(challan.createdAt).toLocaleString('en-IN')}</p>
-                        <p>👤 Reported by: {challan.reporterName}</p>
-                      </div>
-                      <div className="challan-details">
-                        <p><strong>🚨 Violation:</strong> {challan.description}</p>
-                        <p><strong>📍 Location:</strong> {challan.location.address}</p>
-                        {challan.imageUrl && (
-                          <p><strong>📷 Image:</strong> <a href={`http://localhost:5000${challan.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
-                        )}
-                      </div>
-                      {challan.status === 'pending' && (
-                        <div className="challan-actions">
-                          <button onClick={() => {
-                            handleAction(challan.id, 'approved');
-                            setShowReportsModal(false);
-                          }} className="btn btn-success btn-small">✅ Approve</button>
-                          <button onClick={() => {
-                            handleAction(challan.id, 'rejected');
-                            setShowReportsModal(false);
-                          }} className="btn btn-danger btn-small">❌ Reject</button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          </div>
+          <div className="navbar-user-info">
+            <div className="user-greeting">
+              <p className="greeting-text">Shop Name</p>
+              <p className="user-name">{user.name}</p>
+            </div>
+            <button onClick={logout} className="btn btn-danger">Logout</button>
+          </div>
+        </div>
+      </nav>
+      <div className="container dashboard-content">
+        <div className="stats-grid stats-grid-3">
+          <div className="stat-card stat-blue">
+            <div className="stat-content">
+              <div>
+                <p className="stat-label">Total Requests</p>
+                <p className="stat-number">{stats.totalRequests || 0}</p>
+              </div>
+              <div className="stat-icon">📋</div>
+            </div>
+          </div>
+          <div className="stat-card stat-yellow">
+            <div className="stat-content">
+              <div>
+                <p className="stat-label">Pending</p>
+                <p className="stat-number">{stats.pendingRequests || 0}</p>
+              </div>
+              <div className="stat-icon">⏳</div>
+            </div>
+          </div>
+          <div className="stat-card stat-green">
+            <div className="stat-content">
+              <div>
+                <p className="stat-label">Accepted Visits</p>
+                <p className="stat-number">{stats.acceptedRequests || 0}</p>
+              </div>
+              <div className="stat-icon">✅</div>
             </div>
           </div>
         </div>
-      )}
+        <div className="card">
+          <div className="card-header">
+            <h2>Service Requests</h2>
+            <div className="filter-buttons">
+              <button onClick={() => setFilter('all')} 
+                className={`btn btn-filter ${filter === 'all' ? 'active' : ''}`}>All</button>
+              <button onClick={() => setFilter('pending')} 
+                className={`btn btn-filter ${filter === 'pending' ? 'active' : ''}`}>Pending</button>
+              <button onClick={() => setFilter('accepted')} 
+                className={`btn btn-filter ${filter === 'accepted' ? 'active' : ''}`}>Accepted</button>
+              <button onClick={() => setFilter('rejected')} 
+                className={`btn btn-filter ${filter === 'rejected' ? 'active' : ''}`}>Rejected</button>
+            </div>
+          </div>
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading requests...</p>
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔧</div>
+              <p>No service requests to display</p>
+            </div>
+          ) : (
+            <div className="challans-list">
+              {requests.map((request) => (
+                <div key={request.id} className="challan-card">
+                  <div className="challan-header">
+                    <div>
+                      <h3 className="challan-plate">{request.issueType}</h3>
+                      <span className={`status-badge status-${request.status}`}>
+                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="challan-meta">
+                    <p>📅 Requested: {new Date(request.createdAt).toLocaleString('en-IN')}</p>
+                    <p>👤 Requested by: {request.reporterName}</p>
+                  </div>
+                  <div className="challan-details">
+                    <p><strong>🚗 Vehicle:</strong> {request.vehicleInfo}</p>
+                    <p><strong>⚠️ Issue:</strong> {request.description}</p>
+                    <p><strong>📍 Location:</strong> {request.location.address}</p>
+                    {request.imageUrl && (
+                      <p><strong>📷 Photo:</strong> <a href={`http://localhost:5000${request.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
+                    )}
+                  </div>
+                  {request.status === 'pending' && (
+                    <div className="challan-actions">
+                      <button onClick={() => handleAction(request.id, 'accepted')} 
+                        className="btn btn-success btn-small">✅ Will Visit</button>
+                      <button onClick={() => handleAction(request.id, 'rejected')} 
+                        className="btn btn-danger btn-small">❌ Cannot Visit</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -1060,7 +1328,9 @@ function AppContent() {
     );
   }
   if (!user) return <Login />;
-  return user.role === 'police' ? <PoliceDashboard /> : <UserDashboard />;
+  if (user.role === 'police') return <PoliceDashboard />;
+  if (user.role === 'service') return <ServiceShopDashboard />;
+  return <UserDashboard />;
 }
 
 export default function App() {
