@@ -252,6 +252,17 @@ textarea.input-field {
   background: #d1d5db;
 }
 
+.btn-info {
+  background: #60a5fa;
+  color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+  background: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.4);
+}
+
 .btn-full {
   width: 100%;
   margin-top: 10px;
@@ -1202,6 +1213,66 @@ textarea.input-field {
   }
 }
 
+/* ==== SERVICE REQUEST FORM STYLES ==== */
+.service-form-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 0;
+}
+
+.service-type-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.service-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f9fafb;
+}
+
+.service-option:hover {
+  border-color: #60a5fa;
+  background: #f0f9ff;
+}
+
+.service-option.selected {
+  border-color: #3b82f6;
+  background: #e0f2fe;
+}
+
+.service-option input[type="radio"] {
+  margin-top: 4px;
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+}
+
+.service-option .option-content {
+  flex: 1;
+}
+
+.service-option .option-content h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.service-option .option-content p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
 /* ==== LEADERBOARD STYLES ==== */
 .modal-large {
   max-width: 900px;
@@ -1520,5 +1591,5 @@ textarea.input-field {
   background-color: #2563eb;
   border-color: #2563eb;
   color: white;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px rgba(175, 185, 206, 0.3);
 }

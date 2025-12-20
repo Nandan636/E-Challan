@@ -306,7 +306,7 @@ const Register = ({ onBack }) => {
             <select name="role" value={formData.role} onChange={handleChange} className="input-field">
               <option value="user">👤 Citizen</option>
               <option value="police">👮 Police Officer</option>
-              <option value="service">🔧 Service Shop</option>
+              <option value="service_shop">🔧 Service Shop</option>
             </select>
           </div>
           <button onClick={handleSubmit} className="btn btn-primary btn-full" disabled={loading}>
@@ -637,13 +637,43 @@ const RequestService = ({ onClose, onSuccess }) => {
   const { user } = useAuth();
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [issueType, setIssueType] = useState('');
-  const [description, setDescription] = useState('');
-  const [vehicleInfo, setVehicleInfo] = useState('');
+  const [carBrand, setCarBrand] = useState('');
+  const [problem, setProblem] = useState('');
+  const [serviceType, setServiceType] = useState('');
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const vehicleIssues = ['Tyre Puncture', 'Dead Battery', 'Engine Problem', 'Brake Failure', 'Oil Leak', 'Starter Issue', 'Fuel Problem', 'Electrical Fault', 'Windshield Damage', 'Other'];
+  const carBrands = [
+    'Maruti Suzuki',
+    'Tata Motors',
+    'Mahindra',
+    'Hyundai',
+    'Honda',
+    'Toyota',
+    'Kia',
+    'Skoda',
+    'Volkswagen',
+    'Renault',
+    'Nissan',
+    'MG Motor (JSW–MG Motor India)',
+    'Citroën',
+    'Jeep',
+    'BMW',
+    'Mercedes-Benz',
+    'Audi',
+    'Volvo Cars',
+    'Lexus',
+    'Jaguar',
+    'Land Rover',
+    'Mini',
+    'Porsche',
+    'Ferrari'
+  ];
+
+  const serviceTypes = [
+    { id: 'pickup', label: '🚗 Pick Up & Drop', description: 'We will pick up your vehicle and drop it back' },
+    { id: 'self', label: '🏪 Self Drop', description: 'You drop the vehicle at our service center' }
+  ];
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -661,12 +691,12 @@ const RequestService = ({ onClose, onSuccess }) => {
           setLocation({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
-            address: 'Current Location, India'
+            address: 'Current Location'
           });
           setLoading(false);
         },
         () => {
-          alert('Unable to get location');
+          alert('Unable to get location. Please enable location services.');
           setLoading(false);
         }
       );
@@ -675,22 +705,36 @@ const RequestService = ({ onClose, onSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!carBrand) {
+      alert('Please select a car brand');
+      return;
+    }
+    if (!problem.trim()) {
+      alert('Please describe the vehicle problem');
+      return;
+    }
+    if (!serviceType) {
+      alert('Please select a service type');
+      return;
+    }
     if (!location) {
       alert('Please capture your location first');
       return;
     }
-    if (!issueType) {
-      alert('Please select a vehicle issue type');
+    if (!image) {
+      alert('Please upload a photo of the vehicle');
       return;
     }
+    
     setLoading(true);
     try {
       await api.createServiceRequest({
         image,
-        issueType,
-        description,
+        issueType: carBrand,
+        description: problem,
         location,
-        vehicleInfo,
+        vehicleInfo: `${carBrand} - ${serviceType}`,
         reportedBy: user.id,
         reporterName: user.name
       });
@@ -704,69 +748,100 @@ const RequestService = ({ onClose, onSuccess }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>🔧 Request Vehicle Service</h2>
           <button onClick={onClose} className="modal-close">×</button>
         </div>
-        <div>
-          <div className="input-group">
-            <label className="input-label">📷 Upload Vehicle Photo</label>
-            <input type="file" accept="image/*" onChange={handleImageChange} 
-              className="input-field" required />
-            <p className="input-hint">Take a photo showing the vehicle issue</p>
-          </div>
-          {preview && (
-            <div className="image-preview">
-              <img src={preview} alt="Preview" />
+        <form onSubmit={handleSubmit}>
+          <div className="service-form-content">
+            {/* Car Brand Selection */}
+            <div className="input-group">
+              <label className="input-label">� Select Car Brand</label>
+              <select value={carBrand} onChange={(e) => setCarBrand(e.target.value)} 
+                className="input-field" required>
+                <option value="">-- Choose your car brand --</option>
+                {carBrands.map((brand) => (
+                  <option key={brand} value={brand}>{brand}</option>
+                ))}
+              </select>
             </div>
-          )}
-          <div className="input-group">
-            <label className="input-label">🚗 Vehicle Information</label>
-            <input type="text" value={vehicleInfo} onChange={(e) => setVehicleInfo(e.target.value)}
-              className="input-field" placeholder="e.g., Honda City, Silver, 2020" />
-          </div>
-          <div className="input-group">
-            <label className="input-label">⚠️ Issue Type</label>
-            <select value={issueType} onChange={(e) => setIssueType(e.target.value)} className="input-field" required>
-              <option value="">Select issue type</option>
-              {vehicleIssues.map((issue) => (
-                <option key={issue} value={issue}>{issue}</option>
-              ))}
-            </select>
-          </div>
-          <div className="input-group">
-            <label className="input-label">📝 Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)}
-              className="input-field" rows="3" 
-              placeholder="Describe the vehicle problem in detail"
-              required />
-          </div>
-          <div className="input-group">
-            <label className="input-label">📍 Location</label>
-            {!location ? (
-              <button onClick={getLocation} disabled={loading} className="btn btn-success btn-full">
-                {loading ? 'Getting Location...' : '📍 Capture Current Location'}
-              </button>
-            ) : (
-              <div className="location-captured">
-                <p className="location-title">✓ Location Captured Successfully</p>
-                <p className="location-address">{location.address}</p>
-                <p className="location-coords">
-                  Lat: {location.latitude.toFixed(6)}, Long: {location.longitude.toFixed(6)}
-                </p>
+
+            {/* Vehicle Photo Upload */}
+            <div className="input-group">
+              <label className="input-label">�📷 Upload Vehicle Photo</label>
+              <input type="file" accept="image/*" onChange={handleImageChange} 
+                className="input-field" required />
+              <p className="input-hint">Take a clear photo showing the vehicle issue/problem area</p>
+            </div>
+            {preview && (
+              <div className="image-preview">
+                <img src={preview} alt="Vehicle Preview" />
               </div>
             )}
+
+            {/* Problem Description */}
+            <div className="input-group">
+              <label className="input-label">� Describe the Vehicle Problem</label>
+              <textarea value={problem} onChange={(e) => setProblem(e.target.value)}
+                className="input-field" rows="4" 
+                placeholder="Example: Tyre puncture on front left wheel, Engine making strange noise, Battery not charging, etc."
+                required />
+            </div>
+
+            {/* Service Type Selection */}
+            <div className="input-group">
+              <label className="input-label">🚗 Service Type</label>
+              <div className="service-type-options">
+                {serviceTypes.map((type) => (
+                  <div 
+                    key={type.id}
+                    className={`service-option ${serviceType === type.id ? 'selected' : ''}`}
+                    onClick={() => setServiceType(type.id)}
+                  >
+                    <input 
+                      type="radio" 
+                      name="serviceType" 
+                      value={type.id} 
+                      checked={serviceType === type.id}
+                      onChange={() => setServiceType(type.id)}
+                    />
+                    <div className="option-content">
+                      <h4>{type.label}</h4>
+                      <p>{type.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Location Capture */}
+            <div className="input-group">
+              <label className="input-label">📍 Your Location</label>
+              {!location ? (
+                <button type="button" onClick={getLocation} disabled={loading} className="btn btn-success btn-full">
+                  {loading ? 'Getting Location...' : '📍 Capture Current Location'}
+                </button>
+              ) : (
+                <div className="location-captured">
+                  <p className="location-title">✓ Location Captured Successfully</p>
+                  <p className="location-coords">
+                    Latitude: {location.latitude.toFixed(6)}, Longitude: {location.longitude.toFixed(6)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
+
           <div className="modal-actions">
-            <button onClick={handleSubmit} className="btn btn-primary" disabled={loading}>
-              {loading ? '⏳ Submitting...' : '✓ Submit Service Request'}
+            <button type="submit" className="btn btn-primary" disabled={loading || !carBrand || !problem || !serviceType}>
+              {loading ? '⏳ Submitting Request...' : '✓ Submit Service Request'}
             </button>
-            <button onClick={onClose} disabled={loading} className="btn btn-secondary">
+            <button type="button" onClick={onClose} disabled={loading} className="btn btn-secondary">
               Cancel
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
@@ -777,6 +852,7 @@ const UserDashboard = () => {
   const { user, logout } = useAuth();
   const [showUpload, setShowUpload] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showRequestService, setShowRequestService] = useState(false);
   const [success, setSuccess] = useState(false);
   const [stats, setStats] = useState({});
 
@@ -794,6 +870,12 @@ const UserDashboard = () => {
 
   const handleUploadSuccess = () => {
     setShowUpload(false);
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 4000);
+  };
+
+  const handleRequestServiceSuccess = () => {
+    setShowRequestService(false);
     setSuccess(true);
     setTimeout(() => setSuccess(false), 4000);
   };
@@ -834,6 +916,9 @@ const UserDashboard = () => {
           <div className="main-actions">
             <button onClick={() => setShowUpload(true)} className="btn btn-primary btn-large">
               📷 Upload Violation Report
+            </button>
+            <button onClick={() => setShowRequestService(true)} className="btn btn-info btn-large">
+              🔧 Request Vehicle Service
             </button>
             <button onClick={() => setShowLeaderboard(true)} className="btn btn-secondary btn-large">
               🏆 View Leaderboard
@@ -945,6 +1030,7 @@ const UserDashboard = () => {
         </div>
       </div>
       {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
+      {showRequestService && <RequestService onClose={() => setShowRequestService(false)} onSuccess={handleRequestServiceSuccess} />}
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
@@ -1147,6 +1233,8 @@ const PoliceDashboard = () => {
           )}
         </div>
       </div>
+      {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
+      {showRequestService && <RequestService onClose={() => setShowRequestService(false)} onSuccess={handleRequestServiceSuccess} />}
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
@@ -1329,7 +1417,7 @@ function AppContent() {
   }
   if (!user) return <Login />;
   if (user.role === 'police') return <PoliceDashboard />;
-  if (user.role === 'service') return <ServiceShopDashboard />;
+  if (user.role === 'service_shop') return <ServiceShopDashboard />;
   return <UserDashboard />;
 }
 

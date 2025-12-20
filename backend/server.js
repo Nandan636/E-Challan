@@ -289,9 +289,133 @@ app.get('/api/leaderboard', (req, res) => {
   }
 });
 
+// ==================== SERVICE REQUEST ROUTES ====================
+
+// In-memory storage for service requests
+let serviceRequests = [];
+let serviceRequestIdCounter = 1;
+
+// Service request issue types/tags
+const SERVICE_ISSUE_TYPES = [
+  'Tyre Puncture',
+  'Dead Battery',
+  'Engine Trouble',
+  'Brake Issues',
+  'Air Filter',
+  'Windshield Repair',
+  'Light Replacement',
+  'General Maintenance'
+];
+
+// Create a service request
+app.post('/api/service-requests', upload.single('image'), (req, res) => {
+  try {
+    const { issueType, description, location, reportedBy, reporterName, vehicleInfo } = req.body;
+    
+    const serviceRequest = {
+      id: serviceRequestIdCounter++,
+      issueType: issueType || 'General Maintenance',
+      description,
+      imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
+      location: location ? JSON.parse(location) : null,
+      reportedBy: parseInt(reportedBy),
+      reporterName,
+      vehicleInfo,
+      status: 'pending',
+      assignedServiceShop: null,
+      notes: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    serviceRequests.push(serviceRequest);
+    res.json({ success: true, message: 'Service request created', request: serviceRequest });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get all service requests (with filtering)
+app.get('/api/service-requests', (req, res) => {
+  try {
+    const { status } = req.query;
+    let filtered = serviceRequests;
+    
+    if (status && status !== 'all') {
+      filtered = serviceRequests.filter(req => req.status === status);
+    }
+    
+    res.json({ success: true, requests: filtered });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get service requests for a specific user
+app.get('/api/service-requests/user/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const userRequests = serviceRequests.filter(req => req.reportedBy === parseInt(userId));
+    res.json({ success: true, requests: userRequests });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update service request status
+app.patch('/api/service-requests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+    
+    const request = serviceRequests.find(r => r.id === parseInt(id));
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Service request not found' });
+    }
+    
+    if (status) request.status = status;
+    if (notes) request.notes = notes;
+    request.updatedAt = new Date();
+    
+    res.json({ success: true, message: 'Service request updated', request });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete a service request
+app.delete('/api/service-requests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    serviceRequests = serviceRequests.filter(r => r.id !== parseInt(id));
+    res.json({ success: true, message: 'Service request deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get service stats
+app.get('/api/service-stats', (req, res) => {
+  try {
+    const stats = {
+      totalRequests: serviceRequests.length,
+      pendingRequests: serviceRequests.filter(r => r.status === 'pending').length,
+      acceptedRequests: serviceRequests.filter(r => r.status === 'accepted').length,
+      scheduledRequests: serviceRequests.filter(r => r.status === 'scheduled').length,
+      rejectedRequests: serviceRequests.filter(r => r.status === 'rejected').length,
+      completedRequests: serviceRequests.filter(r => r.status === 'completed').length
+    };
+    
+    res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Leaderboard API available at http://localhost:${PORT}/api/leaderboard`);
+  console.log(`🔧 Service Requests API available at http://localhost:${PORT}/api/service-requests`);
 });
