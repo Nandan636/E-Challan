@@ -154,6 +154,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const [showRegister, setShowRegister] = useState(false);
+  const [showEmergency, setShowEmergency] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -170,6 +171,7 @@ const Login = () => {
   };
 
   if (showRegister) return <Register onBack={() => setShowRegister(false)} />;
+  if (showEmergency) return <EmergencyReport onBack={() => setShowEmergency(false)} />;
 
   return (
     <div className="auth-container">
@@ -219,6 +221,9 @@ const Login = () => {
 
           <button onClick={handleSubmit} className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
+          </button>
+          <button onClick={() => setShowEmergency(true)} className="btn btn-danger btn-full" style={{ marginTop: 12 }}>
+            🚨 Emergency Help / Report Accident
           </button>
         </div>
         <div className="auth-footer">
@@ -563,6 +568,159 @@ const UploadChallan = ({ onClose, onSuccess }) => {
               Cancel
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// EMERGENCY REPORT COMPONENT
+const EmergencyReport = ({ onBack }) => {
+  const [name, setName] = useState('');
+  const [accidentId, setAccidentId] = useState('');
+  const [images, setImages] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
+  const [witnessContact, setWitnessContact] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  const generateAccidentId = () => 'ACC' + Date.now() + Math.floor(Math.random() * 1000);
+
+  useEffect(() => {
+    setAccidentId(generateAccidentId());
+  }, []);
+
+  const handleImagesChange = (e) => {
+    const files = Array.from(e.target.files);
+    setImages(files);
+    setImagePreviews(files.map(f => URL.createObjectURL(f)));
+  };
+
+  const getLocation = () => {
+    setLoading(true);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            address: 'Current Location'
+          });
+          setLoading(false);
+        },
+        () => {
+          alert('Unable to get location. Please enable location services.');
+          setLoading(false);
+        }
+      );
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!name || !witnessContact || images.length === 0) {
+      setError('Name, witness contact, and at least one image are required');
+      return;
+    }
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('witnessContact', witnessContact);
+      formData.append('description', description);
+      formData.append('location', JSON.stringify(location));
+      images.forEach(img => formData.append('images', img));
+      const response = await fetch('http://localhost:5000/api/accidents', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message);
+      setSuccess(true);
+      setAccidentId(data.accidentId);
+      // Reset all fields except accidentId
+      setName('');
+      setImages([]);
+      setImagePreviews([]);
+      setWitnessContact('');
+      setDescription('');
+      setLocation(null);
+      // Optionally, regenerate accidentId for next report
+      setTimeout(() => {
+        setSuccess(false);
+        setAccidentId(generateAccidentId());
+      }, 2000);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <div className="auth-header">
+          <h2>🚨 Emergency Help / Report Accident</h2>
+          <button onClick={onBack} className="btn btn-secondary" style={{ float: 'right' }}>Back</button>
+        </div>
+        <div className="emergency-contacts">
+          <p><strong>Police:</strong> <a href="tel:100">100</a></p>
+          <p><strong>Ambulance:</strong> <a href="tel:108">108</a></p>
+        </div>
+        <div className="emergency-form">
+          <h3>Upload Accident Information</h3>
+          <form onSubmit={handleSubmit}>
+            <div className="input-group">
+              <label className="input-label">Accident Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} className="input-field" required />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Accident ID</label>
+              <input type="text" value={accidentId} readOnly className="input-field" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Upload Accident Scene Images</label>
+              <input type="file" accept="image/*" multiple onChange={handleImagesChange} className="input-field" required />
+              <div className="image-preview-row">
+                {imagePreviews.map((src, i) => (
+                  <img key={i} src={src} alt="Preview" style={{ maxWidth: 80, marginRight: 8 }} />
+                ))}
+              </div>
+            </div>
+            <div className="input-group">
+              <label className="input-label">Witness Contact Number</label>
+              <input type="text" value={witnessContact} onChange={e => setWitnessContact(e.target.value)} className="input-field" required />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Description (optional)</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} className="input-field" rows="3" />
+            </div>
+            <div className="input-group">
+              <label className="input-label">Location</label>
+              {!location ? (
+                <button type="button" onClick={getLocation} disabled={loading} className="btn btn-success btn-full">
+                  {loading ? 'Getting Location...' : '📍 Capture Current Location'}
+                </button>
+              ) : (
+                <div className="location-captured">
+                  <p className="location-title">✓ Location Captured Successfully</p>
+                  <p className="location-coords">
+                    Latitude: {location.latitude?.toFixed(6)}, Longitude: {location.longitude?.toFixed(6)}
+                  </p>
+                </div>
+              )}
+            </div>
+            {error && <div className="alert alert-error">{error}</div>}
+            {success && <div className="alert alert-success">✓ Accident report submitted! Your Accident ID: {accidentId}</div>}
+            <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+              {loading ? 'Submitting...' : 'Submit Accident Report'}
+            </button>
+          </form>
         </div>
       </div>
     </div>
@@ -1071,6 +1229,8 @@ const PoliceDashboard = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showRequestService, setShowRequestService] = useState(false);
+  const [showEmergencyTab, setShowEmergencyTab] = useState(false);
+  const [emergencyReports, setEmergencyReports] = useState([]);
   const [expandedChallans, setExpandedChallans] = useState({});
 
   useEffect(() => {
@@ -1108,6 +1268,22 @@ const PoliceDashboard = () => {
       console.error('Error fetching leaderboard:', err);
     }
   };
+
+  // Fetch emergency reports when tab is opened
+  useEffect(() => {
+    if (showEmergencyTab) {
+      const fetchEmergencyReports = async () => {
+        try {
+          const response = await fetch('http://localhost:5000/api/accidents');
+          const data = await response.json();
+          if (data.success) setEmergencyReports(data.reports);
+        } catch (err) {
+          setEmergencyReports([]);
+        }
+      };
+      fetchEmergencyReports();
+    }
+  }, [showEmergencyTab]);
 
   const handleUploadSuccess = () => {
     setShowUpload(false);
@@ -1156,7 +1332,81 @@ const PoliceDashboard = () => {
         </div>
       </nav>
       <div className="container dashboard-content">
-        <div className="stats-grid stats-grid-4">
+        {/* Emergency Reports Tab Button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <button
+            onClick={() => setShowEmergencyTab((v) => !v)}
+            className={`btn btn-danger${showEmergencyTab ? ' active' : ''}`}
+            style={{ minWidth: 180, fontWeight: 600 }}
+          >
+            🚨 {showEmergencyTab ? 'Hide' : 'View'} Emergency Reports
+          </button>
+        </div>
+        {showEmergencyTab ? (
+          <div className="card">
+            <div className="card-header">
+              <h2>Emergency Accident Reports</h2>
+            </div>
+            {emergencyReports.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">🚨</div>
+                <p>No emergency reports yet</p>
+              </div>
+            ) : (
+              <div className="challans-list">
+                {emergencyReports.map((report) => (
+                  <div key={report._id} className="challan-card">
+                    <div className="challan-header">
+                      <div>
+                        <h3 className="challan-plate">{report.name}</h3>
+                        <span className="status-badge">ID: {report.accidentId}</span>
+                      </div>
+                    </div>
+                    <div className="challan-meta">
+                      <p>📅 Reported: {new Date(report.createdAt).toLocaleString('en-IN')}</p>
+                      <p>📞 Witness: {report.witnessContact}</p>
+                    </div>
+                    <div className="challan-details">
+                      <p><strong>📝 Description:</strong> {report.description || 'N/A'}</p>
+                      <p><strong>📍 Location:</strong> {report.location?.address || 'N/A'}</p>
+                      {report.location && (
+                        <>
+                          <p>Lat: {report.location.latitude?.toFixed(6)}, Long: {report.location.longitude?.toFixed(6)}</p>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${report.location.latitude},${report.location.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-info btn-small"
+                            style={{ marginBottom: 8 }}
+                          >
+                            📍 View on Map
+                          </a>
+                        </>
+                      )}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                        {Array.isArray(report.images) && report.images.length > 0 ? (
+                          report.images.map((img, i) => (
+                            <img
+                              key={i}
+                              src={img.startsWith('http') ? img : `http://localhost:5000${img}`}
+                              alt="Accident"
+                              style={{ maxWidth: 120, borderRadius: 4, border: '1px solid #eee' }}
+                              onError={e => { e.target.style.display = 'none'; }}
+                            />
+                          ))
+                        ) : (
+                          <span style={{ color: '#888' }}>No images</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="stats-grid stats-grid-4">
           <div className="stat-card stat-blue">
             <div className="stat-content">
               <div>
@@ -1310,174 +1560,12 @@ const PoliceDashboard = () => {
             </div>
           )}
         </div>
+          </>
+        )}
       </div>
       {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
       {showRequestService && <RequestService onClose={() => setShowRequestService(false)} onSuccess={handleRequestServiceSuccess} />}
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
-    </div>
-  );
-};
-
-// SERVICE SHOP DASHBOARD
-const ServiceShopDashboard = () => {
-  const { user, logout } = useAuth();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [stats, setStats] = useState({});
-
-  useEffect(() => {
-    fetchRequests();
-    fetchStats();
-  }, [filter]);
-
-  const fetchRequests = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getServiceRequests(filter);
-      setRequests(data);
-    } catch (err) {
-      console.error('Error fetching requests:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`${API_URL}/service-stats`);
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.stats);
-      }
-    } catch (err) {
-      console.error('Error fetching stats:', err);
-    }
-  };
-
-  const handleAction = async (requestId, action) => {
-    try {
-      await api.updateServiceRequestStatus(requestId, action);
-      alert(`Service request ${action} successfully!`);
-      fetchRequests();
-      fetchStats();
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  };
-
-  return (
-    <div className="dashboard">
-      <nav className="navbar navbar-service">
-        <div className="container navbar-content">
-          <div className="navbar-brand">
-            <span className="navbar-icon">🔧</span>
-            <div>
-              <h1>Service Shop Portal</h1>
-              <p className="navbar-subtitle">Vehicle Service Management</p>
-            </div>
-          </div>
-          <div className="navbar-user-info">
-            <div className="user-greeting">
-              <p className="greeting-text">Shop Name</p>
-              <p className="user-name">{user.name}</p>
-            </div>
-            <button onClick={logout} className="btn btn-danger">Logout</button>
-          </div>
-        </div>
-      </nav>
-      <div className="container dashboard-content">
-        <div className="stats-grid stats-grid-3">
-          <div className="stat-card stat-blue">
-            <div className="stat-content">
-              <div>
-                <p className="stat-label">Total Requests</p>
-                <p className="stat-number">{stats.totalRequests || 0}</p>
-              </div>
-              <div className="stat-icon">📋</div>
-            </div>
-          </div>
-          <div className="stat-card stat-yellow">
-            <div className="stat-content">
-              <div>
-                <p className="stat-label">Pending</p>
-                <p className="stat-number">{stats.pendingRequests || 0}</p>
-              </div>
-              <div className="stat-icon">⏳</div>
-            </div>
-          </div>
-          <div className="stat-card stat-green">
-            <div className="stat-content">
-              <div>
-                <p className="stat-label">Accepted Visits</p>
-                <p className="stat-number">{stats.acceptedRequests || 0}</p>
-              </div>
-              <div className="stat-icon">✅</div>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <h2>Service Requests</h2>
-            <div className="filter-buttons">
-              <button onClick={() => setFilter('all')} 
-                className={`btn btn-filter ${filter === 'all' ? 'active' : ''}`}>All</button>
-              <button onClick={() => setFilter('pending')} 
-                className={`btn btn-filter ${filter === 'pending' ? 'active' : ''}`}>Pending</button>
-              <button onClick={() => setFilter('accepted')} 
-                className={`btn btn-filter ${filter === 'accepted' ? 'active' : ''}`}>Accepted</button>
-              <button onClick={() => setFilter('rejected')} 
-                className={`btn btn-filter ${filter === 'rejected' ? 'active' : ''}`}>Rejected</button>
-            </div>
-          </div>
-          {loading ? (
-            <div className="loading-state">
-              <div className="spinner"></div>
-              <p>Loading requests...</p>
-            </div>
-          ) : requests.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">🔧</div>
-              <p>No service requests to display</p>
-            </div>
-          ) : (
-            <div className="challans-list">
-              {requests.map((request) => (
-                <div key={request.id} className="challan-card">
-                  <div className="challan-header">
-                    <div>
-                      <h3 className="challan-plate">{request.issueType}</h3>
-                      <span className={`status-badge status-${request.status}`}>
-                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="challan-meta">
-                    <p>📅 Requested: {new Date(request.createdAt).toLocaleString('en-IN')}</p>
-                    <p>👤 Requested by: {request.reporterName}</p>
-                  </div>
-                  <div className="challan-details">
-                    <p><strong>🚗 Vehicle:</strong> {request.vehicleInfo}</p>
-                    <p><strong>⚠️ Issue:</strong> {request.description}</p>
-                    <p><strong>📍 Location:</strong> {request.location.address}</p>
-                    {request.imageUrl && (
-                      <p><strong>📷 Photo:</strong> <a href={`http://localhost:5000${request.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
-                    )}
-                  </div>
-                  {request.status === 'pending' && (
-                    <div className="challan-actions">
-                      <button onClick={() => handleAction(request.id, 'accepted')} 
-                        className="btn btn-success btn-small">✅ Will Visit</button>
-                      <button onClick={() => handleAction(request.id, 'rejected')} 
-                        className="btn btn-danger btn-small">❌ Cannot Visit</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

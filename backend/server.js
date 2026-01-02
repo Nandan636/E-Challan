@@ -23,8 +23,19 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/echallan'
   process.exit(1);
 });
 
-// File Upload Configuration - store in memory
+// File Upload Configuration
 const upload = multer({ storage: multer.memoryStorage() });
+
+const accidentStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname.replace(/\s+/g, '_'));
+  }
+});
+const accidentUpload = multer({ storage: accidentStorage });
 
 // Models
 const UserSchema = new mongoose.Schema({
@@ -52,8 +63,23 @@ const ChallanSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+const AccidentReportSchema = new mongoose.Schema({
+  accidentId: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  images: [{ type: String }],
+  witnessContact: { type: String, required: true },
+  description: { type: String },
+  location: {
+    latitude: Number,
+    longitude: Number,
+    address: String
+  },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Challan = mongoose.model('Challan', ChallanSchema);
+const AccidentReport = mongoose.model('AccidentReport', AccidentReportSchema);
 
 // ==================== AUTH ROUTES ====================
 
@@ -378,6 +404,43 @@ app.get('/api/service-stats', (req, res) => {
     };
     
     res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==================== ACCIDENT REPORT ROUTES ====================
+
+// Accident report upload (multiple images)
+app.post('/api/accidents', accidentUpload.array('images', 5), async (req, res) => {
+  try {
+    const { name, witnessContact, description, location } = req.body;
+    if (!name || !witnessContact || !req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Name, witness contact, and at least one image are required' });
+    }
+    // Generate unique accidentId
+    const accidentId = 'ACC' + Date.now() + Math.floor(Math.random() * 1000);
+    const images = req.files.map(f => `/uploads/${f.filename}`);
+    const report = new AccidentReport({
+      accidentId,
+      name,
+      images,
+      witnessContact,
+      description,
+      location: location ? JSON.parse(location) : null
+    });
+    await report.save();
+    res.json({ success: true, report, message: 'Accident report submitted', accidentId });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get all accident reports
+app.get('/api/accidents', async (req, res) => {
+  try {
+    const reports = await AccidentReport.find().sort({ createdAt: -1 });
+    res.json({ success: true, reports });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
