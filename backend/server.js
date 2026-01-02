@@ -66,7 +66,7 @@ const ChallanSchema = new mongoose.Schema({
 const AccidentReportSchema = new mongoose.Schema({
   accidentId: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  images: [{ type: String }],
+  images: [{ type: String }], // Base64 encoded images
   witnessContact: { type: String, required: true },
   description: { type: String },
   location: {
@@ -412,15 +412,22 @@ app.get('/api/service-stats', (req, res) => {
 // ==================== ACCIDENT REPORT ROUTES ====================
 
 // Accident report upload (multiple images)
-app.post('/api/accidents', accidentUpload.array('images', 5), async (req, res) => {
+app.post('/api/accidents', upload.array('images', 5), async (req, res) => {
   try {
     const { name, witnessContact, description, location } = req.body;
     if (!name || !witnessContact || !req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'Name, witness contact, and at least one image are required' });
     }
+    
     // Generate unique accidentId
     const accidentId = 'ACC' + Date.now() + Math.floor(Math.random() * 1000);
-    const images = req.files.map(f => `/uploads/${f.filename}`);
+    
+    // Convert images to Base64
+    const images = req.files.map(file => {
+      const imageBase64 = file.buffer.toString('base64');
+      return `data:${file.mimetype};base64,${imageBase64}`;
+    });
+    
     const report = new AccidentReport({
       accidentId,
       name,
@@ -429,6 +436,7 @@ app.post('/api/accidents', accidentUpload.array('images', 5), async (req, res) =
       description,
       location: location ? JSON.parse(location) : null
     });
+    
     await report.save();
     res.json({ success: true, report, message: 'Accident report submitted', accidentId });
   } catch (error) {

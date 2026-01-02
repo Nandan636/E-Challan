@@ -603,19 +603,46 @@ const EmergencyReport = ({ onBack }) => {
     setLoading(true);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            address: 'Current Location'
-          });
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+          // Get actual address using reverse geocoding
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const data = await response.json();
+            const address = data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            
+            setLocation({
+              latitude: lat,
+              longitude: lng,
+              address: address
+            });
+          } catch (error) {
+            console.error('Geocoding error:', error);
+            setLocation({
+              latitude: lat,
+              longitude: lng,
+              address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+            });
+          }
+          
           setLoading(false);
         },
-        () => {
-          alert('Unable to get location. Please enable location services.');
+        (error) => {
+          console.error('Geolocation error:', error);
+          alert('Unable to get location. Please enable location services and allow location access.');
           setLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
         }
       );
+    } else {
+      alert('Geolocation is not supported by this browser.');
+      setLoading(false);
     }
   };
 
@@ -1232,6 +1259,7 @@ const PoliceDashboard = () => {
   const [showEmergencyTab, setShowEmergencyTab] = useState(false);
   const [emergencyReports, setEmergencyReports] = useState([]);
   const [expandedChallans, setExpandedChallans] = useState({});
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
     fetchChallans();
@@ -1373,7 +1401,7 @@ const PoliceDashboard = () => {
                         <>
                           <p>Lat: {report.location.latitude?.toFixed(6)}, Long: {report.location.longitude?.toFixed(6)}</p>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${report.location.latitude},${report.location.longitude}`}
+                            href={`https://maps.google.com/?q=${report.location.latitude},${report.location.longitude}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="btn btn-info btn-small"
@@ -1388,10 +1416,17 @@ const PoliceDashboard = () => {
                           report.images.map((img, i) => (
                             <img
                               key={i}
-                              src={img.startsWith('http') ? img : `http://localhost:5000${img}`}
+                              src={img}
                               alt="Accident"
-                              style={{ maxWidth: 120, borderRadius: 4, border: '1px solid #eee' }}
-                              onError={e => { e.target.style.display = 'none'; }}
+                              style={{ 
+                                width: 200, 
+                                height: 150, 
+                                objectFit: 'cover', 
+                                borderRadius: 4, 
+                                border: '1px solid #eee', 
+                                cursor: 'pointer' 
+                              }}
+                              onClick={() => setSelectedImage(img)}
                             />
                           ))
                         ) : (
@@ -1566,6 +1601,17 @@ const PoliceDashboard = () => {
       {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
       {showRequestService && <RequestService onClose={() => setShowRequestService(false)} onSuccess={handleRequestServiceSuccess} />}
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
+      {selectedImage && (
+        <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div className="modal-header">
+              <h2>📷 Accident Image</h2>
+              <button onClick={() => setSelectedImage(null)} className="modal-close">×</button>
+            </div>
+            <img src={selectedImage} alt="Accident Full View" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
