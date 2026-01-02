@@ -1516,10 +1516,16 @@ const PoliceDashboard = () => {
     setShowRequestService(false);
   };
 
-  const handleAction = async (challanId, action) => {
+  // Update API to support blacklistUser
+  const handleAction = async (challanId, action, blacklistUser = false) => {
     try {
-      await api.updateChallanStatus(challanId, action);
-      alert(`Challan ${action} successfully!`);
+      const body = blacklistUser ? { status: action, blacklistUser: true } : { status: action };
+      await fetch(`${API_URL}/challans/${challanId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      alert(`Challan ${action}${blacklistUser ? ' and user blacklisted' : ''} successfully!`);
       fetchChallans();
       fetchStats();
     } catch (err) {
@@ -1751,6 +1757,10 @@ const PoliceDashboard = () => {
                         className="btn btn-success btn-small">✅ Approve</button>
                       <button onClick={() => handleAction(challan._id, 'rejected')} 
                         className="btn btn-danger btn-small">❌ Reject</button>
+                      <button onClick={() => handleAction(challan._id, 'rejected', true)} 
+                        className="btn btn-warning btn-small" title="Reject & Blacklist User">
+                        🚫 Blacklist & Reject
+                      </button>
                     </div>
                   )}
                 </div>

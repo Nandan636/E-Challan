@@ -33,6 +33,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { type: String, enum: ['user', 'police', 'service_shop'], default: 'user' },
   carBrand: { type: String }, // For service shops
+  isBlacklisted: { type: Boolean, default: false }, // Blacklist flag
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -123,12 +124,13 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
     const user = await User.findOne({ email });
     if (!user || user.password !== password) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
-    
+    if (user.isBlacklisted) {
+      return res.status(403).json({ success: false, message: 'Your account is blacklisted' });
+    }
     res.json({ 
       success: true,
       user: { id: user._id, name: user.name, email: user.email, role: user.role, carBrand: user.carBrand }
@@ -203,22 +205,25 @@ app.post('/api/challans', upload.fields([
   }
 });
 
-// Update challan status
+// Update challan status with optional blacklist
 app.patch('/api/challans/:id', async (req, res) => {
   try {
-    const { status } = req.body;
-    
+    const { status, blacklistUser } = req.body;
     const challan = await Challan.findByIdAndUpdate(
       req.params.id,
       { status, updatedAt: Date.now() },
       { new: true }
     );
-    
     if (!challan) {
       return res.status(404).json({ success: false, message: 'Challan not found' });
     }
-    
-    res.json({ success: true, challan, message: `Challan ${status} successfully` });
+    // Blacklist user if requested
+    if (status === 'rejected' && blacklistUser) {
+      if (challan.reportedBy) {
+        await User.findByIdAndUpdate(challan.reportedBy, { isBlacklisted: true });
+      }
+    }
+    res.json({ success: true, challan, message: `Challan ${status} successfully${blacklistUser ? ' and user blacklisted' : ''}` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -480,6 +485,24 @@ app.get('/api/accidents', async (req, res) => {
   try {
     const reports = await AccidentReport.find().sort({ createdAt: -1 });
     res.json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Police: Blacklist or unblacklist a user by email
+app.post('/api/users/blacklist', async (req, res) => {
+  try {
+    const { email, blacklist } = req.body;
+    const user = await User.findOneAndUpdate(
+      { email },
+      { isBlacklisted: !!blacklist },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, user, message: blacklist ? 'User blacklisted' : 'User unblacklisted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
