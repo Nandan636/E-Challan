@@ -43,10 +43,12 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Update ChallanSchema to allow imageUrl and videoUrl (imageUrl not required)
 const ChallanSchema = new mongoose.Schema({
   numberPlate: { type: String, required: true },
   description: { type: String, required: true },
-  imageUrl: { type: String, required: true },
+  imageUrl: { type: String },
+  videoUrl: { type: String },
   location: {
     latitude: Number,
     longitude: Number,
@@ -127,25 +129,28 @@ app.get('/api/challans', async (req, res) => {
 });
 
 // Create new challan with image upload
-app.post('/api/challans', upload.single('image'), async (req, res) => {
+app.post('/api/challans', upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'video', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const { numberPlate, description, location, reportedBy, reporterName } = req.body;
-
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Image is required' });
+    const { numberPlate, description, location, reportedBy, reporterName, tags } = req.body;
+    if (!req.files || (!req.files['image'] && !req.files['video'])) {
+      return res.status(400).json({ success: false, message: 'Image or video is required' });
     }
-
+    const imageFile = req.files['image'] ? req.files['image'][0] : null;
+    const videoFile = req.files['video'] ? req.files['video'][0] : null;
     const challan = new Challan({
       numberPlate,
       description,
-      imageUrl: `/uploads/${req.file.filename}`,
-      location: JSON.parse(location),
+      imageUrl: imageFile ? `/uploads/${imageFile.filename}` : null,
+      videoUrl: videoFile ? `/uploads/${videoFile.filename}` : null,
+      location: location ? JSON.parse(location) : null,
       reportedBy,
       reporterName,
+      tags: tags ? JSON.parse(tags) : [],
     });
-
     await challan.save();
-
     res.json({ success: true, challan, message: 'Challan submitted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

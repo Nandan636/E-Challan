@@ -58,7 +58,8 @@ const api = {
   
   uploadChallan: async (challanData) => {
     const formData = new FormData();
-    formData.append('image', challanData.image);
+    if (challanData.image) formData.append('image', challanData.image);
+    if (challanData.video) formData.append('video', challanData.video);
     formData.append('numberPlate', challanData.numberPlate);
     formData.append('description', challanData.description);
     formData.append('location', JSON.stringify(challanData.location));
@@ -324,6 +325,8 @@ const UploadChallan = ({ onClose, onSuccess }) => {
   const { user } = useAuth();
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [video, setVideo] = useState(null);
+  const [videoPreview, setVideoPreview] = useState(null);
   const [numberPlate, setNumberPlate] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState(null);
@@ -400,6 +403,14 @@ const UploadChallan = ({ onClose, onSuccess }) => {
     }
   };
 
+  const handleVideoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setVideo(file);
+      setVideoPreview(URL.createObjectURL(file));
+    }
+  };
+
   const getLocation = () => {
     setLoading(true);
     if (navigator.geolocation) {
@@ -430,17 +441,27 @@ const UploadChallan = ({ onClose, onSuccess }) => {
       alert('Please select at least one violation tag');
       return;
     }
+    if (!image && !video) {
+      alert('Please upload at least an image or a video');
+      return;
+    }
     setLoading(true);
     try {
-      await api.uploadChallan({ 
-        image, 
-        numberPlate, 
-        description, 
-        location,
-        reportedBy: user.id,
-        reporterName: user.name,
-        tags: selectedTags
+      const formData = new FormData();
+      if (image) formData.append('image', image);
+      if (video) formData.append('video', video);
+      formData.append('numberPlate', numberPlate);
+      formData.append('description', description);
+      formData.append('location', JSON.stringify(location));
+      formData.append('reportedBy', user.id);
+      formData.append('reporterName', user.name);
+      formData.append('tags', JSON.stringify(selectedTags));
+      const response = await fetch('http://localhost:5000/api/challans', {
+        method: 'POST',
+        body: formData
       });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.message);
       onSuccess();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -459,8 +480,7 @@ const UploadChallan = ({ onClose, onSuccess }) => {
         <div>
           <div className="input-group">
             <label className="input-label">📷 Upload Vehicle Image</label>
-            <input type="file" accept="image/*" onChange={handleImageChange} 
-              className="input-field" required />
+            <input type="file" accept="image/*" onChange={handleImageChange} className="input-field" />
             <p className="input-hint">Capture clear photo of the vehicle and number plate</p>
           </div>
           {preview && (
@@ -468,10 +488,14 @@ const UploadChallan = ({ onClose, onSuccess }) => {
               <img src={preview} alt="Preview" />
             </div>
           )}
-          {detecting && (
-            <div className="alert alert-info">
-              <div className="spinner-small"></div>
-              <span>🤖 Python AI service with EasyOCR analyzing image...</span>
+          <div className="input-group">
+            <label className="input-label">🎥 Upload Video (optional)</label>
+            <input type="file" accept="video/*" onChange={handleVideoChange} className="input-field" />
+            <p className="input-hint">You can upload a video showing the violation (optional)</p>
+          </div>
+          {videoPreview && (
+            <div className="video-preview">
+              <video src={videoPreview} controls width="100%" style={{ maxHeight: 240 }} />
             </div>
           )}
           {!detecting && (
@@ -1207,6 +1231,12 @@ const PoliceDashboard = () => {
                     <p><strong>📍 Location:</strong> {challan.location.address}</p>
                     {challan.imageUrl && (
                       <p><strong>📷 Image:</strong> <a href={`http://localhost:5000${challan.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
+                    )}
+                    {challan.videoUrl && (
+                      <div style={{ margin: '8px 0' }}>
+                        <strong>🎥 Video Evidence:</strong>
+                        <video src={`http://localhost:5000${challan.videoUrl}`} controls width="100%" style={{ maxHeight: 240, marginTop: 4 }} />
+                      </div>
                     )}
                   </div>
                   {challan.status === 'pending' && (
