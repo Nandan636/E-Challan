@@ -146,6 +146,12 @@ const api = {
     const data = await response.json();
     if (!data.success) throw new Error(data.message);
     return data;
+  },
+
+  getUserServiceRequests: async (userId) => {
+    const response = await fetch(`${API_URL}/service-requests/user/${userId}`);
+    const data = await response.json();
+    return data.requests || [];
   }
 };
 
@@ -1164,12 +1170,89 @@ const RequestService = ({ onClose, onSuccess }) => {
   );
 };
 
+// MY SERVICE REQUESTS COMPONENT
+const MyServiceRequests = ({ onClose, userId }) => {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const data = await api.getUserServiceRequests(userId);
+        setRequests(data);
+      } catch (err) {
+        console.error('Error fetching requests:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRequests();
+  }, [userId]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>📋 My Service Requests</h2>
+          <button onClick={onClose} className="modal-close">×</button>
+        </div>
+        <div className="leaderboard-content">
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading your requests...</p>
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔧</div>
+              <p>No service requests yet. Submit your first request!</p>
+            </div>
+          ) : (
+            <div className="challans-list">
+              {requests.map((request) => (
+                <div key={request._id} className="challan-card">
+                  <div className="challan-header">
+                    <div>
+                      <h3 className="challan-plate">{request.numberPlate}</h3>
+                      <span className={`status-badge status-${request.status}`}>
+                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="challan-meta">
+                    <p>📅 Submitted: {new Date(request.createdAt).toLocaleString('en-IN')}</p>
+                  </div>
+                  <div className="challan-details">
+                    <p><strong>🚗 Vehicle:</strong> {request.vehicleInfo}</p>
+                    <p><strong>⚠️ Issue:</strong> {request.description}</p>
+                    {request.imageData && (
+                      <div style={{ margin: '8px 0' }}>
+                        <strong>📷 Vehicle Photo:</strong>
+                        <img 
+                          src={request.imageData} 
+                          alt="Vehicle Issue" 
+                          style={{ width: '100%', height: '200px', marginTop: 4, borderRadius: 4, objectFit: 'cover' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // USER DASHBOARD
 const UserDashboard = () => {
   const { user, logout } = useAuth();
   const [showUpload, setShowUpload] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showRequestService, setShowRequestService] = useState(false);
+  const [showMyRequests, setShowMyRequests] = useState(false);
   const [success, setSuccess] = useState(false);
   const [stats, setStats] = useState({});
 
@@ -1236,6 +1319,9 @@ const UserDashboard = () => {
             </button>
             <button onClick={() => setShowRequestService(true)} className="btn btn-info btn-large">
               🔧 Request Vehicle Service
+            </button>
+            <button onClick={() => setShowMyRequests(true)} className="btn btn-secondary btn-large">
+              📋 My Service Requests
             </button>
             <button onClick={() => setShowLeaderboard(true)} className="btn btn-secondary btn-large">
               🏆 View Leaderboard
@@ -1348,6 +1434,7 @@ const UserDashboard = () => {
       </div>
       {showUpload && <UploadChallan onClose={() => setShowUpload(false)} onSuccess={handleUploadSuccess} />}
       {showRequestService && <RequestService onClose={() => setShowRequestService(false)} onSuccess={handleRequestServiceSuccess} />}
+      {showMyRequests && <MyServiceRequests onClose={() => setShowMyRequests(false)} userId={user.id} />}
       {showLeaderboard && <Leaderboard onClose={() => setShowLeaderboard(false)} />}
     </div>
   );
