@@ -1071,6 +1071,7 @@ const PoliceDashboard = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showRequestService, setShowRequestService] = useState(false);
+  const [expandedChallans, setExpandedChallans] = useState({});
 
   useEffect(() => {
     fetchChallans();
@@ -1125,6 +1126,13 @@ const PoliceDashboard = () => {
     } catch (err) {
       alert('Error: ' + err.message);
     }
+  };
+
+  const toggleEvidence = (challanId) => {
+    setExpandedChallans(prev => ({
+      ...prev,
+      [challanId]: !prev[challanId]
+    }));
   };
 
   return (
@@ -1229,13 +1237,31 @@ const PoliceDashboard = () => {
                   <div className="challan-details">
                     <p><strong>🚨 Violation:</strong> {challan.description}</p>
                     <p><strong>📍 Location:</strong> {challan.location.address}</p>
-                    {challan.imageUrl && (
-                      <p><strong>📷 Image:</strong> <a href={`http://localhost:5000${challan.imageUrl}`} target="_blank" rel="noreferrer">View Photo</a></p>
-                    )}
-                    {challan.videoUrl && (
+                    {(challan.imageData || challan.videoData) && (
                       <div style={{ margin: '8px 0' }}>
-                        <strong>🎥 Video Evidence:</strong>
-                        <video src={`http://localhost:5000${challan.videoUrl}`} controls width="100%" style={{ maxHeight: 240, marginTop: 4 }} />
+                        <button 
+                          onClick={() => toggleEvidence(challan._id)}
+                          className="btn btn-info btn-small"
+                          style={{ marginBottom: '8px' }}
+                        >
+                          {expandedChallans[challan._id] ? '🔼 Hide Evidence' : '🔽 View Evidence'}
+                        </button>
+                        {expandedChallans[challan._id] && (
+                          <div>
+                            {challan.imageData && (
+                              <div style={{ margin: '8px 0' }}>
+                                <strong>📷 Image Evidence:</strong>
+                                <img src={challan.imageData} alt="Violation" style={{ width: '100%', maxHeight: 240, marginTop: 4, borderRadius: 4 }} />
+                              </div>
+                            )}
+                            {challan.videoData && (
+                              <div style={{ margin: '8px 0' }}>
+                                <strong>🎥 Video Evidence:</strong>
+                                <video src={challan.videoData} controls width="100%" style={{ maxHeight: 240, marginTop: 4 }} />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

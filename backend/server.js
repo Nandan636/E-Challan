@@ -23,16 +23,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/echallan'
   process.exit(1);
 });
 
-// File Upload Configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
+// File Upload Configuration - store in memory
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Models
 const UserSchema = new mongoose.Schema({
@@ -43,12 +35,11 @@ const UserSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-// Update ChallanSchema to allow imageUrl and videoUrl (imageUrl not required)
 const ChallanSchema = new mongoose.Schema({
   numberPlate: { type: String, required: true },
   description: { type: String, required: true },
-  imageUrl: { type: String },
-  videoUrl: { type: String },
+  imageData: { type: String }, // Base64 encoded image
+  videoData: { type: String }, // Base64 encoded video
   location: {
     latitude: Number,
     longitude: Number,
@@ -128,29 +119,47 @@ app.get('/api/challans', async (req, res) => {
   }
 });
 
-// Create new challan with image upload
+// Create new challan with image/video upload
 app.post('/api/challans', upload.fields([
   { name: 'image', maxCount: 1 },
   { name: 'video', maxCount: 1 }
 ]), async (req, res) => {
   try {
     const { numberPlate, description, location, reportedBy, reporterName, tags } = req.body;
+    
     if (!req.files || (!req.files['image'] && !req.files['video'])) {
       return res.status(400).json({ success: false, message: 'Image or video is required' });
     }
-    const imageFile = req.files['image'] ? req.files['image'][0] : null;
-    const videoFile = req.files['video'] ? req.files['video'][0] : null;
+    
+    let imageData = null;
+    let videoData = null;
+    
+    // Convert image to Base64
+    if (req.files['image']) {
+      const imageFile = req.files['image'][0];
+      const imageBase64 = imageFile.buffer.toString('base64');
+      imageData = `data:${imageFile.mimetype};base64,${imageBase64}`;
+    }
+    
+    // Convert video to Base64
+    if (req.files['video']) {
+      const videoFile = req.files['video'][0];
+      const videoBase64 = videoFile.buffer.toString('base64');
+      videoData = `data:${videoFile.mimetype};base64,${videoBase64}`;
+    }
+    
     const challan = new Challan({
       numberPlate,
       description,
-      imageUrl: imageFile ? `/uploads/${imageFile.filename}` : null,
-      videoUrl: videoFile ? `/uploads/${videoFile.filename}` : null,
+      imageData,
+      videoData,
       location: location ? JSON.parse(location) : null,
       reportedBy,
       reporterName,
-      tags: tags ? JSON.parse(tags) : [],
     });
+    
     await challan.save();
+    
     res.json({ success: true, challan, message: 'Challan submitted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
