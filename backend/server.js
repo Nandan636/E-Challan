@@ -13,7 +13,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-app.use('/uploads', express.static('uploads'));
+// Removed static file serving since images are now stored in MongoDB
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/echallan')
@@ -26,23 +26,13 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/echallan'
 // File Upload Configuration
 const upload = multer({ storage: multer.memoryStorage() });
 
-const accidentStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname.replace(/\s+/g, '_'));
-  }
-});
-const accidentUpload = multer({ storage: accidentStorage });
-
 // Models
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'police'], default: 'user' },
+  role: { type: String, enum: ['user', 'police', 'service_shop'], default: 'user' },
+  carBrand: { type: String }, // For service shops
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -77,16 +67,37 @@ const AccidentReportSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const ServiceRequestSchema = new mongoose.Schema({
+  issueType: { type: String, required: true },
+  description: { type: String, required: true },
+  imageData: { type: String }, // Base64 encoded image
+  numberPlate: { type: String, required: true }, // Vehicle number plate
+  location: {
+    latitude: Number,
+    longitude: Number,
+    address: String
+  },
+  reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reporterName: { type: String, required: true },
+  vehicleInfo: { type: String, required: true },
+  status: { type: String, enum: ['pending', 'accepted', 'scheduled', 'completed', 'rejected'], default: 'pending' },
+  assignedServiceShop: { type: String },
+  notes: { type: String },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', UserSchema);
 const Challan = mongoose.model('Challan', ChallanSchema);
 const AccidentReport = mongoose.model('AccidentReport', AccidentReportSchema);
+const ServiceRequest = mongoose.model('ServiceRequest', ServiceRequestSchema);
 
 // ==================== AUTH ROUTES ====================
 
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, carBrand } = req.body;
     
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -95,13 +106,13 @@ app.post('/api/auth/register', async (req, res) => {
     }
     
     // Create new user
-    const user = new User({ name, email, password, role });
+    const user = new User({ name, email, password, role, carBrand });
     await user.save();
     
     res.json({ 
       success: true, 
       message: 'Registration successful',
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, carBrand: user.carBrand }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -120,7 +131,7 @@ app.post('/api/auth/login', async (req, res) => {
     
     res.json({ 
       success: true,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, carBrand: user.carBrand }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -288,10 +299,6 @@ app.get('/api/leaderboard', async (req, res) => {
 
 // ==================== SERVICE REQUEST ROUTES ====================
 
-// In-memory storage for service requests
-let serviceRequests = [];
-let serviceRequestIdCounter = 1;
-
 // Service request issue types/tags
 const SERVICE_ISSUE_TYPES = [
   'Tyre Puncture',
@@ -305,54 +312,68 @@ const SERVICE_ISSUE_TYPES = [
 ];
 
 // Create a service request
-app.post('/api/service-requests', upload.single('image'), (req, res) => {
+app.post('/api/service-requests', upload.single('image'), async (req, res) => {
   try {
-    const { issueType, description, location, reportedBy, reporterName, vehicleInfo } = req.body;
+    const { issueType, description, location, reportedBy, reporterName, vehicleInfo, numberPlate } = req.body;
     
-    const serviceRequest = {
-      id: serviceRequestIdCounter++,
+    let imageData = null;
+    if (req.file) {
+      const imageBase64 = req.file.buffer.toString('base64');
+      imageData = `data:${req.file.mimetype};base64,${imageBase64}`;
+    }
+    
+    const serviceRequest = new ServiceRequest({
       issueType: issueType || 'General Maintenance',
       description,
-      imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
+      imageData,
+      numberPlate,
       location: location ? JSON.parse(location) : null,
-      reportedBy: parseInt(reportedBy),
+      reportedBy,
       reporterName,
       vehicleInfo,
       status: 'pending',
       assignedServiceShop: null,
-      notes: '',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
+      notes: ''
+    });
     
-    serviceRequests.push(serviceRequest);
+    await serviceRequest.save();
     res.json({ success: true, message: 'Service request created', request: serviceRequest });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Get all service requests (with filtering)
-app.get('/api/service-requests', (req, res) => {
+// Get service requests for a specific user or filtered by car brand for service shops
+app.get('/api/service-requests', async (req, res) => {
   try {
-    const { status } = req.query;
-    let filtered = serviceRequests;
+    const { status, carBrand } = req.query;
+    let filter = {};
     
     if (status && status !== 'all') {
-      filtered = serviceRequests.filter(req => req.status === status);
+      filter.status = status;
     }
     
-    res.json({ success: true, requests: filtered });
+    if (carBrand) {
+      filter.issueType = carBrand;
+    }
+    
+    const requests = await ServiceRequest.find(filter)
+      .populate('reportedBy', 'name email')
+      .sort({ createdAt: -1 });
+    
+    res.json({ success: true, requests });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // Get service requests for a specific user
-app.get('/api/service-requests/user/:userId', (req, res) => {
+app.get('/api/service-requests/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const userRequests = serviceRequests.filter(req => req.reportedBy === parseInt(userId));
+    const userRequests = await ServiceRequest.find({ reportedBy: userId })
+      .populate('reportedBy', 'name email')
+      .sort({ createdAt: -1 });
     res.json({ success: true, requests: userRequests });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -360,19 +381,19 @@ app.get('/api/service-requests/user/:userId', (req, res) => {
 });
 
 // Update service request status
-app.patch('/api/service-requests/:id', (req, res) => {
+app.patch('/api/service-requests/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status, notes } = req.body;
     
-    const request = serviceRequests.find(r => r.id === parseInt(id));
+    const updateData = { updatedAt: Date.now() };
+    if (status) updateData.status = status;
+    if (notes) updateData.notes = notes;
+    
+    const request = await ServiceRequest.findByIdAndUpdate(id, updateData, { new: true });
     if (!request) {
       return res.status(404).json({ success: false, message: 'Service request not found' });
     }
-    
-    if (status) request.status = status;
-    if (notes) request.notes = notes;
-    request.updatedAt = new Date();
     
     res.json({ success: true, message: 'Service request updated', request });
   } catch (error) {
@@ -381,10 +402,13 @@ app.patch('/api/service-requests/:id', (req, res) => {
 });
 
 // Delete a service request
-app.delete('/api/service-requests/:id', (req, res) => {
+app.delete('/api/service-requests/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    serviceRequests = serviceRequests.filter(r => r.id !== parseInt(id));
+    const request = await ServiceRequest.findByIdAndDelete(id);
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Service request not found' });
+    }
     res.json({ success: true, message: 'Service request deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -392,15 +416,22 @@ app.delete('/api/service-requests/:id', (req, res) => {
 });
 
 // Get service stats
-app.get('/api/service-stats', (req, res) => {
+app.get('/api/service-stats', async (req, res) => {
   try {
+    const totalRequests = await ServiceRequest.countDocuments();
+    const pendingRequests = await ServiceRequest.countDocuments({ status: 'pending' });
+    const acceptedRequests = await ServiceRequest.countDocuments({ status: 'accepted' });
+    const scheduledRequests = await ServiceRequest.countDocuments({ status: 'scheduled' });
+    const rejectedRequests = await ServiceRequest.countDocuments({ status: 'rejected' });
+    const completedRequests = await ServiceRequest.countDocuments({ status: 'completed' });
+    
     const stats = {
-      totalRequests: serviceRequests.length,
-      pendingRequests: serviceRequests.filter(r => r.status === 'pending').length,
-      acceptedRequests: serviceRequests.filter(r => r.status === 'accepted').length,
-      scheduledRequests: serviceRequests.filter(r => r.status === 'scheduled').length,
-      rejectedRequests: serviceRequests.filter(r => r.status === 'rejected').length,
-      completedRequests: serviceRequests.filter(r => r.status === 'completed').length
+      totalRequests,
+      pendingRequests,
+      acceptedRequests,
+      scheduledRequests,
+      rejectedRequests,
+      completedRequests
     };
     
     res.json({ success: true, stats });

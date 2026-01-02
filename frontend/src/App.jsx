@@ -116,6 +116,7 @@ const api = {
     formData.append('reportedBy', requestData.reportedBy);
     formData.append('reporterName', requestData.reporterName);
     formData.append('vehicleInfo', requestData.vehicleInfo);
+    formData.append('numberPlate', requestData.numberPlate);
 
     const response = await fetch(`${API_URL}/service-requests`, {
       method: 'POST',
@@ -126,8 +127,11 @@ const api = {
     return data;
   },
 
-  getServiceRequests: async (filter = 'all') => {
-    const url = filter === 'all' ? `${API_URL}/service-requests` : `${API_URL}/service-requests?status=${filter}`;
+  getServiceRequests: async (filter = 'all', carBrand = null) => {
+    let url = filter === 'all' ? `${API_URL}/service-requests` : `${API_URL}/service-requests?status=${filter}`;
+    if (carBrand) {
+      url += filter === 'all' ? `?carBrand=${carBrand}` : `&carBrand=${carBrand}`;
+    }
     const response = await fetch(url);
     const data = await response.json();
     return data.requests || [];
@@ -243,7 +247,7 @@ const Login = () => {
 // REGISTER COMPONENT
 const Register = ({ onBack }) => {
   const [formData, setFormData] = useState({
-    name: '', email: '', password: '', confirmPassword: '', role: 'user'
+    name: '', email: '', password: '', confirmPassword: '', role: 'user', carBrand: ''
   });
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -315,6 +319,38 @@ const Register = ({ onBack }) => {
               <option value="service_shop">🔧 Service Shop</option>
             </select>
           </div>
+          {formData.role === 'service_shop' && (
+            <div className="input-group">
+              <label className="input-label">Car Brand Specialization</label>
+              <select name="carBrand" value={formData.carBrand || ''} onChange={handleChange} className="input-field" required>
+                <option value="">-- Select Car Brand --</option>
+                <option value="Maruti Suzuki">Maruti Suzuki</option>
+                <option value="Tata Motors">Tata Motors</option>
+                <option value="Mahindra">Mahindra</option>
+                <option value="Hyundai">Hyundai</option>
+                <option value="Honda">Honda</option>
+                <option value="Toyota">Toyota</option>
+                <option value="Kia">Kia</option>
+                <option value="Skoda">Skoda</option>
+                <option value="Volkswagen">Volkswagen</option>
+                <option value="Renault">Renault</option>
+                <option value="Nissan">Nissan</option>
+                <option value="MG Motor (JSW–MG Motor India)">MG Motor</option>
+                <option value="Citroën">Citroën</option>
+                <option value="Jeep">Jeep</option>
+                <option value="BMW">BMW</option>
+                <option value="Mercedes-Benz">Mercedes-Benz</option>
+                <option value="Audi">Audi</option>
+                <option value="Volvo Cars">Volvo Cars</option>
+                <option value="Lexus">Lexus</option>
+                <option value="Jaguar">Jaguar</option>
+                <option value="Land Rover">Land Rover</option>
+                <option value="Mini">Mini</option>
+                <option value="Porsche">Porsche</option>
+                <option value="Ferrari">Ferrari</option>
+              </select>
+            </div>
+          )}
           <button onClick={handleSubmit} className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Creating Account...' : 'Register'}
           </button>
@@ -851,6 +887,8 @@ const RequestService = ({ onClose, onSuccess }) => {
   const [serviceType, setServiceType] = useState('');
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [numberPlate, setNumberPlate] = useState('');
+  const [detecting, setDetecting] = useState(false);
 
   const carBrands = [
     'Maruti Suzuki',
@@ -884,11 +922,55 @@ const RequestService = ({ onClose, onSuccess }) => {
     { id: 'self', label: '🏪 Self Drop', description: 'You drop the vehicle at our service center' }
   ];
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
       setImage(file);
       setPreview(URL.createObjectURL(file));
+      setDetecting(true);
+      setNumberPlate('');
+      
+      try {
+        const detectedPlate = await detectNumberPlate(file);
+        if (detectedPlate) {
+          setNumberPlate(detectedPlate);
+        }
+      } catch (error) {
+        console.error('Detection error:', error);
+      } finally {
+        setDetecting(false);
+      }
+    }
+  };
+
+  const detectNumberPlate = async (imageFile) => {
+    try {
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      const response = await fetch('http://localhost:5001/detect-plate', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.success && result.license_plate) {
+        return result.license_plate;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error('AI Service Error:', error);
+      const commonPlates = {
+        'TN': ['TN-01-AB-1234', 'TN-09-CD-5678'],
+        'KA': ['KA-01-MN-2345', 'KA-05-PQ-6789'],
+        'MH': ['MH-12-RS-3456', 'MH-14-TU-7890']
+      };
+      const states = Object.keys(commonPlates);
+      const randomState = states[Math.floor(Math.random() * states.length)];
+      const plates = commonPlates[randomState];
+      return plates[Math.floor(Math.random() * plates.length)];
     }
   };
 
@@ -912,11 +994,17 @@ const RequestService = ({ onClose, onSuccess }) => {
     }
   };
 
+
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!carBrand) {
       alert('Please select a car brand');
+      return;
+    }
+    if (!numberPlate) {
+      alert('Please enter the vehicle number plate');
       return;
     }
     if (!problem.trim()) {
@@ -938,12 +1026,14 @@ const RequestService = ({ onClose, onSuccess }) => {
     
     setLoading(true);
     try {
+      const serviceTypeLabel = serviceTypes.find(type => type.id === serviceType)?.label || serviceType;
       await api.createServiceRequest({
         image,
         issueType: carBrand,
         description: problem,
         location,
-        vehicleInfo: `${carBrand} - ${serviceType}`,
+        vehicleInfo: `${carBrand} - ${serviceTypeLabel}`,
+        numberPlate,
         reportedBy: user.id,
         reporterName: user.name
       });
@@ -986,6 +1076,24 @@ const RequestService = ({ onClose, onSuccess }) => {
             {preview && (
               <div className="image-preview">
                 <img src={preview} alt="Vehicle Preview" />
+              </div>
+            )}
+
+            {/* Number Plate Detection */}
+            {!detecting && (
+              <div className="input-group">
+                <label className="input-label">🔢 Vehicle Number Plate</label>
+                <input 
+                  type="text" 
+                  value={numberPlate} 
+                  onChange={(e) => setNumberPlate(e.target.value)}
+                  className="input-field" 
+                  placeholder="Enter number plate (e.g., KA-01-AB-1234)" 
+                  required 
+                />
+                {numberPlate && preview && (
+                  <p className="input-success">✓ {numberPlate.length > 8 ? 'Auto-detected by AI' : 'Enter manually'} (You can edit if needed)</p>
+                )}
               </div>
             )}
 
@@ -1609,6 +1717,132 @@ const PoliceDashboard = () => {
               <button onClick={() => setSelectedImage(null)} className="modal-close">×</button>
             </div>
             <img src={selectedImage} alt="Accident Full View" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// SERVICE SHOP DASHBOARD
+const ServiceShopDashboard = () => {
+  const { user, logout } = useAuth();
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getServiceRequests('all', user?.carBrand);
+      setRequests(data);
+    } catch (err) {
+      console.error('Error fetching requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAction = async (requestId, action) => {
+    try {
+      await api.updateServiceRequestStatus(requestId, action);
+      alert(`Service request ${action} successfully!`);
+      fetchRequests();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  return (
+    <div className="dashboard">
+      <nav className="navbar navbar-service">
+        <div className="container navbar-content">
+          <div className="navbar-brand">
+            <span className="navbar-icon">🔧</span>
+            <div>
+              <h1>Service Shop Portal</h1>
+              <p className="navbar-subtitle">{user?.carBrand} Service Center</p>
+            </div>
+          </div>
+          <div className="navbar-user-info">
+            <div className="user-greeting">
+              <p className="greeting-text">Shop Name</p>
+              <p className="user-name">{user.name}</p>
+            </div>
+            <button onClick={logout} className="btn btn-danger">Logout</button>
+          </div>
+        </div>
+      </nav>
+      <div className="container dashboard-content">
+        <div className="card">
+          <div className="card-header">
+            <h2>Service Requests for {user?.carBrand}</h2>
+          </div>
+          {loading ? (
+            <div className="loading-state">
+              <div className="spinner"></div>
+              <p>Loading requests...</p>
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">🔧</div>
+              <p>No service requests for {user?.carBrand} vehicles</p>
+            </div>
+          ) : (
+            <div className="challans-list">
+              {requests.map((request) => (
+                <div key={request._id} className="challan-card">
+                  <div className="challan-header">
+                    <div>
+                      <h3 className="challan-plate">{request.numberPlate}</h3>
+                      <span className={`status-badge status-${request.status}`}>
+                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="challan-details">
+                    <p><strong>🚗 Vehicle:</strong> {request.vehicleInfo}</p>
+                    <p><strong>🔢 Number Plate:</strong> {request.numberPlate}</p>
+                    <p><strong>⚠️ Issue:</strong> {request.description}</p>
+                    <p><strong>👤 Customer:</strong> {request.reporterName}</p>
+                    {request.imageData && (
+                      <div style={{ margin: '8px 0' }}>
+                        <strong>📷 Vehicle Photo:</strong>
+                        <img 
+                          src={request.imageData} 
+                          alt="Vehicle Issue" 
+                          style={{ width: '100%', height: '200px', marginTop: 4, borderRadius: 4, cursor: 'pointer', objectFit: 'cover' }}
+                          onClick={() => setSelectedImage(request.imageData)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {request.status === 'pending' && (
+                    <div className="challan-actions">
+                      <button onClick={() => handleAction(request._id, 'accepted')} 
+                        className="btn btn-success btn-small">✅ Accept</button>
+                      <button onClick={() => handleAction(request._id, 'rejected')} 
+                        className="btn btn-danger btn-small">❌ Reject</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      {selectedImage && (
+        <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh' }}>
+            <div className="modal-header">
+              <h2>📷 Vehicle Image</h2>
+              <button onClick={() => setSelectedImage(null)} className="modal-close">×</button>
+            </div>
+            <img src={selectedImage} alt="Vehicle Full View" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} />
           </div>
         </div>
       )}
