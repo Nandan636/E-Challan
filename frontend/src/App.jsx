@@ -1043,10 +1043,15 @@ const PoliceDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [stats, setStats] = useState({});
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showRequestService, setShowRequestService] = useState(false);
 
   useEffect(() => {
     fetchChallans();
     fetchStats();
+    fetchLeaderboard();
   }, [filter]);
 
   const fetchChallans = async () => {
@@ -1068,6 +1073,23 @@ const PoliceDashboard = () => {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
+  };
+
+  const fetchLeaderboard = async () => {
+    try {
+      const data = await api.getLeaderboard();
+      setLeaderboard(data.slice(0, 5));
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+    }
+  };
+
+  const handleUploadSuccess = () => {
+    setShowUpload(false);
+  };
+
+  const handleRequestServiceSuccess = () => {
+    setShowRequestService(false);
   };
 
   const handleAction = async (challanId, action) => {
