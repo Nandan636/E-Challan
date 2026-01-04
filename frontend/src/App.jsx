@@ -897,6 +897,14 @@ const RequestService = ({ onClose, onSuccess }) => {
   const [detecting, setDetecting] = useState(false);
   const [brandError, setBrandError] = useState('');
 
+  // Car brands list
+  const carBrands = [
+    'Maruti Suzuki', 'Tata Motors', 'Mahindra', 'Hyundai', 'Honda', 'Toyota',
+    'Kia', 'Skoda', 'Volkswagen', 'Renault', 'Nissan', 'MG Motor', 'Citroën',
+    'Jeep', 'BMW', 'Mercedes-Benz', 'Audi', 'Volvo Cars', 'Lexus', 'Jaguar',
+    'Land Rover', 'Mini', 'Porsche', 'Ferrari'
+  ];
+
   // Pre-recorded number plates for each brand
   const brandNumberPlates = {
     'BMW': ['KA-01-BMW-1234', 'MH-12-BMW-5678', 'DL-03-BMW-4321', 'TN-09-BMW-8765', 'GJ-05-BMW-2468'],
@@ -1817,6 +1825,7 @@ const ServiceShopDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchRequests();
@@ -1824,20 +1833,24 @@ const ServiceShopDashboard = () => {
 
   const fetchRequests = async () => {
     setLoading(true);
+    setError('');
     try {
-      const data = await api.getServiceRequests('all', user?.carBrand);
+      const data = await api.getServiceRequests();
       setRequests(data);
     } catch (err) {
-      console.error('Error fetching requests:', err);
+      setError('Failed to load service requests. Please check your API and network.');
+      setRequests([]);
+      console.error('Error fetching service requests:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAction = async (requestId, action) => {
+  // Renamed to avoid duplicate declaration
+  const handleServiceAction = async (requestId, status) => {
     try {
-      await api.updateServiceRequestStatus(requestId, action);
-      alert(`Service request ${action} successfully!`);
+      await api.updateServiceRequestStatus(requestId, status);
+      alert(`Service request ${status} successfully!`);
       fetchRequests();
     } catch (err) {
       alert('Error: ' + err.message);
@@ -1846,18 +1859,15 @@ const ServiceShopDashboard = () => {
 
   return (
     <div className="dashboard">
-      <nav className="navbar navbar-service">
+      <nav className="navbar navbar-service-shop">
         <div className="container navbar-content">
           <div className="navbar-brand">
-            <span className="navbar-icon">🔧</span>
-            <div>
-              <h1>Service Shop Portal</h1>
-              <p className="navbar-subtitle">{user?.carBrand} Service Center</p>
-            </div>
+            <span className="navbar-icon">🏪</span>
+            <h1>Service Shop Portal</h1>
           </div>
           <div className="navbar-user-info">
             <div className="user-greeting">
-              <p className="greeting-text">Shop Name</p>
+              <p className="greeting-text">Welcome,</p>
               <p className="user-name">{user.name}</p>
             </div>
             <button onClick={logout} className="btn btn-danger">Logout</button>
@@ -1866,18 +1876,16 @@ const ServiceShopDashboard = () => {
       </nav>
       <div className="container dashboard-content">
         <div className="card">
-          <div className="card-header">
-            <h2>Service Requests for {user?.carBrand}</h2>
-          </div>
+          <h2 className="card-title">Service Requests</h2>
           {loading ? (
             <div className="loading-state">
               <div className="spinner"></div>
-              <p>Loading requests...</p>
+              <p>Loading service requests...</p>
             </div>
           ) : requests.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">🔧</div>
-              <p>No service requests for {user?.carBrand} vehicles</p>
+              <p>No service requests yet.</p>
             </div>
           ) : (
             <div className="challans-list">
@@ -1891,48 +1899,45 @@ const ServiceShopDashboard = () => {
                       </span>
                     </div>
                   </div>
+                  <div className="challan-meta">
+                    <p>📅 Submitted: {new Date(request.createdAt).toLocaleString('en-IN')}</p>
+                  </div>
                   <div className="challan-details">
                     <p><strong>🚗 Vehicle:</strong> {request.vehicleInfo}</p>
-                    <p><strong>🔢 Number Plate:</strong> {request.numberPlate}</p>
                     <p><strong>⚠️ Issue:</strong> {request.description}</p>
-                    <p><strong>👤 Customer:</strong> {request.reporterName}</p>
                     {request.imageData && (
                       <div style={{ margin: '8px 0' }}>
                         <strong>📷 Vehicle Photo:</strong>
                         <img 
                           src={request.imageData} 
                           alt="Vehicle Issue" 
-                          style={{ width: '100%', height: '200px', marginTop: 4, borderRadius: 4, cursor: 'pointer', objectFit: 'cover' }}
+                          style={{ width: '100%', height: '200px', marginTop: 4, borderRadius: 4, objectFit: 'cover', cursor: 'pointer' }}
                           onClick={() => setSelectedImage(request.imageData)}
                         />
                       </div>
                     )}
                   </div>
-                  {request.status === 'pending' && (
-                    <div className="challan-actions">
-                      <button onClick={() => handleAction(request._id, 'accepted')} 
-                        className="btn btn-success btn-small">✅ Accept</button>
-                      <button onClick={() => handleAction(request._id, 'rejected')} 
-                        className="btn btn-danger btn-small">❌ Reject</button>
-                    </div>
-                  )}
+                  <div className="challan-actions">
+                    <button onClick={() => handleServiceAction(request._id, 'approved')} className="btn btn-success btn-small">Approve</button>
+                    <button onClick={() => handleServiceAction(request._id, 'rejected')} className="btn btn-danger btn-small">Reject</button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
-      {selectedImage && (
-        <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh' }}>
-            <div className="modal-header">
-              <h2>📷 Vehicle Image</h2>
-              <button onClick={() => setSelectedImage(null)} className="modal-close">×</button>
+        {selectedImage && (
+          <div className="modal-overlay" onClick={() => setSelectedImage(null)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '90vh' }}>
+              <div className="modal-header">
+                <h2>📷 Vehicle Image</h2>
+                <button onClick={() => setSelectedImage(null)} className="modal-close">×</button>
+              </div>
+              <img src={selectedImage} alt="Vehicle Full View" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} />
             </div>
-            <img src={selectedImage} alt="Vehicle Full View" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
