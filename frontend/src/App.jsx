@@ -895,33 +895,15 @@ const RequestService = ({ onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [numberPlate, setNumberPlate] = useState('');
   const [detecting, setDetecting] = useState(false);
+  const [brandError, setBrandError] = useState('');
 
-  const carBrands = [
-    'Maruti Suzuki',
-    'Tata Motors',
-    'Mahindra',
-    'Hyundai',
-    'Honda',
-    'Toyota',
-    'Kia',
-    'Skoda',
-    'Volkswagen',
-    'Renault',
-    'Nissan',
-    'MG Motor (JSW–MG Motor India)',
-    'Citroën',
-    'Jeep',
-    'BMW',
-    'Mercedes-Benz',
-    'Audi',
-    'Volvo Cars',
-    'Lexus',
-    'Jaguar',
-    'Land Rover',
-    'Mini',
-    'Porsche',
-    'Ferrari'
-  ];
+  // Pre-recorded number plates for each brand
+  const brandNumberPlates = {
+    'BMW': ['KA-01-BMW-1234', 'MH-12-BMW-5678', 'DL-03-BMW-4321', 'TN-09-BMW-8765', 'GJ-05-BMW-2468'],
+    'Audi': ['KA-02-AU-1111', 'MH-13-AU-2222', 'DL-04-AU-3333', 'TN-10-AU-4444', 'GJ-06-AU-5555'],
+    'Mahindra': ['KA-03-MH-9999', 'MH-14-MH-8888', 'DL-05-MH-7777', 'TN-11-MH-6666', 'GJ-07-MH-5555'],
+    'Tata': ['KA-04-TT-1212', 'MH-15-TT-2323', 'DL-06-TT-3434', 'TN-12-TT-4545', 'GJ-08-TT-5656']
+  };
 
   const serviceTypes = [
     { id: 'pickup', label: '🚗 Pick Up & Drop', description: 'We will pick up your vehicle and drop it back' },
@@ -1000,11 +982,17 @@ const RequestService = ({ onClose, onSuccess }) => {
     }
   };
 
-
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+    setBrandError('');
+    // Brand/number plate validation
+    if (['BMW', 'Audi', 'Mahindra', 'Tata'].includes(carBrand)) {
+      const validPlates = brandNumberPlates[carBrand] || [];
+      if (!validPlates.includes(numberPlate.trim())) {
+        setBrandError('Vehicle not under this brand');
+        return;
+      }
+    }
     if (!carBrand) {
       alert('Please select a car brand');
       return;
@@ -1029,7 +1017,6 @@ const RequestService = ({ onClose, onSuccess }) => {
       alert('Please upload a photo of the vehicle');
       return;
     }
-    
     setLoading(true);
     try {
       const serviceTypeLabel = serviceTypes.find(type => type.id === serviceType)?.label || serviceType;
@@ -1097,7 +1084,10 @@ const RequestService = ({ onClose, onSuccess }) => {
                   placeholder="Enter number plate (e.g., KA-01-AB-1234)" 
                   required 
                 />
-                {numberPlate && preview && (
+                {brandError && (
+                  <p className="input-error" style={{ color: 'red', fontWeight: 600 }}>{brandError}</p>
+                )}
+                {numberPlate && preview && !brandError && (
                   <p className="input-success">✓ {numberPlate.length > 8 ? 'Auto-detected by AI' : 'Enter manually'} (You can edit if needed)</p>
                 )}
               </div>
