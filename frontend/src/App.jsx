@@ -1252,6 +1252,7 @@ const UserDashboard = () => {
   const [showRequestService, setShowRequestService] = useState(false);
   const [showMyRequests, setShowMyRequests] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [stats, setStats] = useState({});
 
   useEffect(() => {
@@ -1268,12 +1269,14 @@ const UserDashboard = () => {
 
   const handleUploadSuccess = () => {
     setShowUpload(false);
+    setSuccessMessage('Challan Submitted Successfully!');
     setSuccess(true);
     setTimeout(() => setSuccess(false), 4000);
   };
 
   const handleRequestServiceSuccess = () => {
     setShowRequestService(false);
+    setSuccessMessage('Service request submitted successfully!');
     setSuccess(true);
     setTimeout(() => setSuccess(false), 4000);
   };
@@ -1300,8 +1303,8 @@ const UserDashboard = () => {
           <div className="alert alert-success alert-large">
             <span className="alert-icon">✓</span>
             <div>
-              <p className="alert-title">Challan Submitted Successfully!</p>
-              <p className="alert-subtitle">Your report has been sent to the police department.</p>
+              <p className="alert-title">{successMessage}</p>
+              <p className="alert-subtitle">{successMessage === 'Challan Submitted Successfully!' ? 'Your report has been sent to the police department.' : 'Your request has been sent to the service shop.'}</p>
             </div>
           </div>
         )}
@@ -1822,9 +1825,6 @@ const PoliceDashboard = () => {
 // SERVICE SHOP DASHBOARD
 const ServiceShopDashboard = () => {
   const { user, logout } = useAuth();
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
